@@ -27,7 +27,6 @@ export async function POST(request: NextRequest) {
         id: result.user.id,
         name: result.user.name,
         email: result.user.email,
-        role: result.user.role,
         status: result.user.status,
       },
     });

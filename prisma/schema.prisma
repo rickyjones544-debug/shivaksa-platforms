@@ -9,47 +9,139 @@ datasource db {
   provider = "postgresql"
 }
 
-// User model - minimal Phase 2 authentication foundation
-// Organization and full RBAC will be added in Phase 3
+// Phase 3: Multi-tenant foundation
+// - User is global; authentication happens at the User level.
+// - Organization is the tenant isolation boundary.
+// - OrganizationMembership ties a User to an Organization with a Role.
+// - Session captures the active membership context for a login.
+
 model User {
   id           String   @id @default(dbgenerated("gen_random_uuid()"))
   name         String
   email        String   @unique
   passwordHash String   @map("password_hash")
-  status       String   @default("PENDING") // ACTIVE, PENDING, SUSPENDED
-  role         String   @default("CLIENT_VIEWER") // Role-ready for Phase 3
+  status       String   @default("PENDING") // ACTIVE, PENDING, SUSPENDED (global/platform status)
+  isSuperAdmin Boolean  @default(false) @map("is_super_admin") // platform-wide super admin
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   // Relations
   sessions       Session[]
   passwordResets PasswordReset[]
+  memberships  OrganizationMembership[]
 
   @@index([email])
   @@index([status])
+  @@index([isSuperAdmin])
   @@map("users")
 }
 
-// Session model - server-side session storage
-// Phase 3: session will link to user, then organization, then role
-model Session {
-  id        String   @id @default(dbgenerated("gen_random_uuid()"))
-  tokenHash String   @unique @map("token_hash")
-  userId    String   @map("user_id")
-  expiresAt DateTime @map("expires_at")
-  revoked   Boolean  @default(false)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+// Tenant isolation boundary. Every business record belongs to exactly one Organization.
+model Organization {
+  id          String   @id @default(dbgenerated("gen_random_uuid()"))
+  name        String
+  slug        String   @unique
+  status      String   @default("ACTIVE") // ACTIVE, SUSPENDED
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  memberships OrganizationMembership[]
+
+  @@index([slug])
+  @@index([status])
+  @@map("organizations")
+}
+
+// RBAC anchor: a user's role within a specific organization.
+// A user may belong to multiple organizations with different roles.
+model OrganizationMembership {
+  id             String   @id @default(dbgenerated("gen_random_uuid()"))
+  userId         String   @map("user_id")
+  organizationId String   @map("organization_id")
+  roleId         String   @map("role_id")
+  status         String   @default("ACTIVE") // ACTIVE, PENDING, SUSPENDED
+  joinedAt       DateTime @default(now()) @map("joined_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role         Role         @relation(fields: [roleId], references: [id])
+  sessions     Session[]
+
+  @@unique([userId, organizationId])
+  @@index([userId])
+  @@index([organizationId])
+  @@index([roleId])
+  @@map("organization_memberships")
+}
+
+// System + custom roles. isSystem prevents accidental deletion of built-in roles.
+model Role {
+  id          String   @id @default(dbgenerated("gen_random_uuid()"))
+  name        String   @unique
+  description String?
+  isSystem    Boolean  @default(false) @map("is_system")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  permissions RolePermission[]
+  memberships OrganizationMembership[]
+
+  @@index([name])
+  @@map("roles")
+}
+
+// Permission definition. scope + action (+ optional resource) form the permission key.
+model Permission {
+  id       String  @id @default(dbgenerated("gen_random_uuid()"))
+  scope    String  // e.g. "crm", "bpo", "admin"
+  action   String  // e.g. "read", "write", "delete", "manage"
+  resource String? // e.g. "leads", "contacts"; null means all resources in scope
+
+  roles RolePermission[]
+
+  @@unique([scope, action, resource])
+  @@index([scope])
+  @@map("permissions")
+}
+
+// Many-to-many join between Role and Permission.
+model RolePermission {
+  roleId       String @map("role_id")
+  permissionId String @map("permission_id")
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+// Session model - server-side session storage.
+// Phase 3: session now carries the active membership context for tenant routing/RBAC.
+model Session {
+  id           String   @id @default(dbgenerated("gen_random_uuid()"))
+  tokenHash    String   @unique @map("token_hash")
+  userId       String   @map("user_id")
+  membershipId String?  @map("membership_id") // active tenant context; nullable until chosen
+  expiresAt    DateTime @map("expires_at")
+  revoked      Boolean  @default(false)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  membership OrganizationMembership? @relation(fields: [membershipId], references: [id], onDelete: SetNull)
 
   @@index([tokenHash])
   @@index([userId])
+  @@index([membershipId])
   @@index([expiresAt])
   @@map("sessions")
 }
 
-// Password reset tokens - short-lived, one-time use
+// Password reset tokens - short-lived, one-time use.
 model PasswordReset {
   id        String   @id @default(dbgenerated("gen_random_uuid()"))
   tokenHash String   @unique @map("token_hash")

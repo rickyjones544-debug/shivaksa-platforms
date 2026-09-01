@@ -11,19 +11,18 @@ import {
   getUserFromSession,
   getSessionToken,
   revokeSession,
-  generateSessionToken,
-  hashToken,
 } from './session';
 import { validateLogin, validateRegistration } from './validation';
 
 const GENERIC_AUTH_ERROR = 'Invalid email or password';
 const GENERIC_SUSPENDED_ERROR = 'Account is suspended';
 
+// Phase 3: AuthUser is the global user identity.
+// Organization-specific role is resolved via OrganizationMembership in Step 2.
 export type AuthUser = {
   id: string;
   name: string;
   email: string;
-  role: string;
   status: string;
 };
 
@@ -35,14 +34,12 @@ function toAuthUser(user: {
   id: string;
   name: string;
   email: string;
-  role: string;
   status: string;
 }): AuthUser {
   return {
     id: user.id,
     name: user.name,
     email: user.email,
-    role: user.role,
     status: user.status,
   };
 }
@@ -112,7 +109,6 @@ export async function registerUser(data: {
       email: data.email.toLowerCase().trim(),
       passwordHash,
       status: 'PENDING',
-      role: 'CLIENT_VIEWER', // Default role; admin roles must be assigned by an admin in Phase 3
     },
   });
 
