@@ -29,6 +29,7 @@ model User {
   sessions       Session[]
   passwordResets PasswordReset[]
   memberships    OrganizationMembership[]
+  invitationsSent Invitation[]
 
   // CRM relations
   createdContacts Contact[]
@@ -53,6 +54,7 @@ model Organization {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   memberships OrganizationMembership[]
+  invitations Invitation[]
 
   // CRM relations
   contacts  Contact[]
@@ -99,6 +101,7 @@ model Role {
 
   permissions RolePermission[]
   memberships OrganizationMembership[]
+  invitations Invitation[]
 
   @@index([name])
   @@map("roles")
@@ -287,4 +290,32 @@ model Note {
   @@index([leadId])
   @@index([campaignId])
   @@map("notes")
+}
+
+// ============================================================================
+// Organization Invitations � Step 4
+// Secure, expirable, single-use tokens for inviting users into organizations.
+// Only the hashed token is persisted; the raw token is delivered to the invitee.
+// ============================================================================
+
+model Invitation {
+  id             String   @id @default(dbgenerated("gen_random_uuid()"))
+  email          String
+  organizationId String   @map("organization_id")
+  roleId         String   @map("role_id")
+  tokenHash      String   @unique @map("token_hash")
+  status         String   @default("PENDING") // PENDING, ACCEPTED, EXPIRED, REVOKED
+  invitedById    String   @map("invited_by_id")
+  expiresAt      DateTime @map("expires_at")
+  usedAt         DateTime? @map("used_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role         Role         @relation(fields: [roleId], references: [id])
+  invitedBy    User         @relation(fields: [invitedById], references: [id])
+
+  @@index([tokenHash])
+  @@index([organizationId])
+  @@index([email])
+  @@map("invitations")
 }

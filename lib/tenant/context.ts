@@ -42,12 +42,15 @@ export async function resolveAuthContext(
     },
   });
 
-  let membership = preferredMembershipId
-    ? memberships.find((m) => m.id === preferredMembershipId)
-    : memberships[0];
+  let membership: typeof memberships[number] | undefined;
 
-  // If preferred membership is no longer active, fall back to first active one.
-  if (!membership) membership = memberships[0];
+  if (preferredMembershipId) {
+    // Require the explicit session membership to be active. Do not silently fall
+    // back to another membership to avoid confused-deputy issues after suspension.
+    membership = memberships.find((m) => m.id === preferredMembershipId);
+  } else {
+    membership = memberships[0];
+  }
 
   if (!membership && !user.isSuperAdmin) {
     return null;

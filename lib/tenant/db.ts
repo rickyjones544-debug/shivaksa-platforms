@@ -33,12 +33,28 @@ export function tenantCreateData<T extends Record<string, unknown>>(
   };
 }
 
+type TenantOwnedRecord =
+  | { organizationId: string }
+  | { id: string; organizationId?: string }
+  | { id: string };
+
+function getOrganizationId(record: TenantOwnedRecord): string | undefined {
+  if ('organizationId' in record && record.organizationId) {
+    return record.organizationId;
+  }
+  if ('id' in record && !('organizationId' in record)) {
+    return record.id;
+  }
+  return undefined;
+}
+
 /**
  * Assert that an existing record belongs to the authenticated organization.
  * Throws a not-found style error to avoid leaking cross-tenant existence.
+ * Accepts records with organizationId or bare organization objects with id.
  */
 export function assertTenantOwnership(
-  record: { organizationId: string } | null,
+  record: TenantOwnedRecord | null,
   ctx: AuthenticatedContext,
   message = 'Not found'
 ): void {
@@ -48,7 +64,9 @@ export function assertTenantOwnership(
   if (!ctx.organization) {
     throw new Error('No active organization');
   }
-  if (record.organizationId !== ctx.organization.id && !ctx.user.isSuperAdmin) {
+
+  const recordOrgId = getOrganizationId(record);
+  if (recordOrgId !== ctx.organization.id && !ctx.user.isSuperAdmin) {
     throw new Error(message);
   }
 }
