@@ -37,6 +37,9 @@ const allPermissions = [
   { scope: 'crm', action: 'read', resource: 'campaigns' },
   { scope: 'crm', action: 'write', resource: 'campaigns' },
   { scope: 'crm', action: 'delete', resource: 'campaigns' },
+  { scope: 'crm', action: 'read', resource: 'notes' },
+  { scope: 'crm', action: 'write', resource: 'notes' },
+  { scope: 'crm', action: 'delete', resource: 'notes' },
 
   // BPO
   { scope: 'bpo', action: 'manage' },

@@ -48,6 +48,9 @@ const crmPermissions: PermissionDefinition[] = [
   { scope: 'crm', action: 'read', resource: 'campaigns', description: 'Read campaigns' },
   { scope: 'crm', action: 'write', resource: 'campaigns', description: 'Create/update campaigns' },
   { scope: 'crm', action: 'delete', resource: 'campaigns', description: 'Delete campaigns' },
+  { scope: 'crm', action: 'read', resource: 'notes', description: 'Read notes' },
+  { scope: 'crm', action: 'write', resource: 'notes', description: 'Create/update notes' },
+  { scope: 'crm', action: 'delete', resource: 'notes', description: 'Delete notes' },
 ];
 
 // BPO module

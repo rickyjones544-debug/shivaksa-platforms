@@ -28,7 +28,14 @@ model User {
   // Relations
   sessions       Session[]
   passwordResets PasswordReset[]
-  memberships  OrganizationMembership[]
+  memberships    OrganizationMembership[]
+
+  // CRM relations
+  createdContacts Contact[]
+  createdLeads    Lead[] @relation("CreatedLeads")
+  assignedLeads   Lead[] @relation("AssignedLeads")
+  createdCampaigns Campaign[]
+  createdNotes    Note[]
 
   @@index([email])
   @@index([status])
@@ -46,6 +53,12 @@ model Organization {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   memberships OrganizationMembership[]
+
+  // CRM relations
+  contacts  Contact[]
+  leads     Lead[]
+  campaigns Campaign[]
+  notes     Note[]
 
   @@index([slug])
   @@index([status])
@@ -155,4 +168,123 @@ model PasswordReset {
   @@index([tokenHash])
   @@index([userId])
   @@map("password_resets")
+}
+
+// ============================================================================
+// CRM Module — Step 3
+// Every CRM record is scoped to an Organization. Notes may attach to contacts,
+// leads, or campaigns, but always carry organizationId for tenant isolation.
+// ============================================================================
+
+model Contact {
+  id             String   @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId String   @map("organization_id")
+  firstName      String   @map("first_name")
+  lastName       String?  @map("last_name")
+  email          String?
+  phone          String?
+  company        String?
+  status         String   @default("ACTIVE") // ACTIVE, INACTIVE
+  createdById    String   @map("created_by_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation(fields: [createdById], references: [id])
+  leads        Lead[]
+  notes        Note[]
+
+  @@index([organizationId])
+  @@index([email])
+  @@index([organizationId, email])
+  @@index([organizationId, status])
+  @@map("contacts")
+}
+
+model Lead {
+  id             String   @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId String   @map("organization_id")
+  contactId      String?  @map("contact_id")
+  title          String
+  status         String   @default("NEW") // NEW, CONTACTED, QUALIFIED, LOST, WON
+  value          Decimal? @db.Decimal(12, 2)
+  source         String?
+  assignedToId   String?  @map("assigned_to_id")
+  createdById    String   @map("created_by_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact      Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  assignedTo   User?        @relation("AssignedLeads", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdBy    User         @relation("CreatedLeads", fields: [createdById], references: [id])
+  campaigns    CampaignLead[]
+  notes        Note[]
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([contactId])
+  @@map("leads")
+}
+
+model Campaign {
+  id             String   @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId String   @map("organization_id")
+  name           String
+  status         String   @default("DRAFT") // DRAFT, ACTIVE, PAUSED, COMPLETED
+  startDate      DateTime? @map("start_date")
+  endDate        DateTime? @map("end_date")
+  createdById    String   @map("created_by_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation(fields: [createdById], references: [id])
+  leads        CampaignLead[]
+  notes        Note[]
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@map("campaigns")
+}
+
+// Join table between Campaigns and Leads. organizationId is denormalized for
+// tenant-scoped queries and must match the owning campaign/lead organization.
+model CampaignLead {
+  id             String @id @default(dbgenerated("gen_random_uuid()"))
+  campaignId     String @map("campaign_id")
+  leadId         String @map("lead_id")
+  organizationId String @map("organization_id")
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  lead     Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, leadId])
+  @@index([organizationId])
+  @@index([leadId])
+  @@map("campaign_leads")
+}
+
+model Note {
+  id             String  @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId String  @map("organization_id")
+  content        String
+  contactId      String? @map("contact_id")
+  leadId         String? @map("lead_id")
+  campaignId     String? @map("campaign_id")
+  createdById    String  @map("created_by_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact      Contact?     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  lead         Lead?        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  campaign     Campaign?    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation(fields: [createdById], references: [id])
+
+  @@index([organizationId])
+  @@index([contactId])
+  @@index([leadId])
+  @@index([campaignId])
+  @@map("notes")
 }
