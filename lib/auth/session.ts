@@ -25,7 +25,7 @@ export function hashToken(token: string): string {
  * Create a new server-side session for a user.
  * Returns the raw token (for cookie) and stores the hash.
  */
-export async function createSession(userId: string) {
+export async function createSession(userId: string, membershipId?: string) {
   const token = generateSessionToken();
   const tokenHash = hashToken(token);
   const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_MS);
@@ -34,6 +34,7 @@ export async function createSession(userId: string) {
     data: {
       tokenHash,
       userId,
+      membershipId,
       expiresAt,
     },
   });
@@ -42,10 +43,10 @@ export async function createSession(userId: string) {
 }
 
 /**
- * Get the authenticated user from a session token.
- * Returns null if session is invalid, expired, or revoked.
+ * Look up a session by raw token.
+ * Returns null if invalid, expired, or revoked.
  */
-export async function getUserFromSession(token: string | undefined) {
+export async function getSession(token: string | undefined) {
   if (!token) return null;
 
   const tokenHash = hashToken(token);
@@ -59,7 +60,28 @@ export async function getUserFromSession(token: string | undefined) {
   if (session.revoked) return null;
   if (new Date() > session.expiresAt) return null;
 
-  return session.user;
+  return session;
+}
+
+/**
+ * Get the authenticated user from a session token.
+ * Returns null if session is invalid, expired, or revoked.
+ */
+export async function getUserFromSession(token: string | undefined) {
+  const session = await getSession(token);
+  return session?.user ?? null;
+}
+
+/**
+ * Update the active membership on an existing session.
+ * Used when a user switches organizations.
+ */
+export async function setSessionMembership(token: string, membershipId: string) {
+  const tokenHash = hashToken(token);
+  await prisma.session.updateMany({
+    where: { tokenHash },
+    data: { membershipId },
+  });
 }
 
 /**
@@ -117,10 +139,7 @@ export async function getSessionToken(): Promise<string | undefined> {
 export async function cleanupExpiredSessions() {
   await prisma.session.deleteMany({
     where: {
-      OR: [
-        { expiresAt: { lt: new Date() } },
-        { revoked: true },
-      ],
+      OR: [{ expiresAt: { lt: new Date() } }, { revoked: true }],
     },
   });
 }

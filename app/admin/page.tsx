@@ -2,9 +2,9 @@ import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth/auth';
 
 export default async function AdminDashboard() {
-  const user = await getCurrentUser();
+  const ctx = await getCurrentUser();
 
-  if (!user) {
+  if (!ctx) {
     redirect('/login?redirect=/admin');
   }
 
@@ -14,7 +14,7 @@ export default async function AdminDashboard() {
         Admin Dashboard
       </h1>
       <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-        Welcome, {user.name} ({user.email})
+        Welcome, {ctx.user.name} ({ctx.user.email}) — {ctx.organization?.name}
       </p>
     </div>
   );

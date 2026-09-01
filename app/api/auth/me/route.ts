@@ -3,9 +3,9 @@ import { getCurrentUser } from '@/lib/auth/auth';
 
 export async function GET() {
   try {
-    const user = await getCurrentUser();
+    const ctx = await getCurrentUser();
 
-    if (!user) {
+    if (!ctx) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
@@ -14,12 +14,7 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        status: user.status,
-      },
+      ctx,
     });
   } catch (error) {
     console.error('Auth me error:', error);

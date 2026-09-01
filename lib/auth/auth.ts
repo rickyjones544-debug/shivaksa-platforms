@@ -1,4 +1,6 @@
 import { prisma } from '@/lib/db/prisma';
+import type { AuthenticatedContext } from '@/lib/rbac/authorization';
+import { resolveAuthContext } from '@/lib/tenant/context';
 import {
   hashPassword,
   verifyPassword,
@@ -8,7 +10,7 @@ import {
   createSession,
   setSessionCookie,
   clearSessionCookie,
-  getUserFromSession,
+  getSession,
   getSessionToken,
   revokeSession,
 } from './session';
@@ -17,32 +19,12 @@ import { validateLogin, validateRegistration } from './validation';
 const GENERIC_AUTH_ERROR = 'Invalid email or password';
 const GENERIC_SUSPENDED_ERROR = 'Account is suspended';
 
-// Phase 3: AuthUser is the global user identity.
-// Organization-specific role is resolved via OrganizationMembership in Step 2.
-export type AuthUser = {
-  id: string;
-  name: string;
-  email: string;
-  status: string;
-};
+// Re-export for consumers
+export type { AuthenticatedContext } from '@/lib/rbac/authorization';
 
 export type AuthResult =
-  | { success: true; user: AuthUser }
+  | { success: true; ctx: AuthenticatedContext }
   | { success: false; error: string };
-
-function toAuthUser(user: {
-  id: string;
-  name: string;
-  email: string;
-  status: string;
-}): AuthUser {
-  return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    status: user.status,
-  };
-}
 
 export async function loginUser(
   email: string,
@@ -70,10 +52,16 @@ export async function loginUser(
     return { success: false, error: GENERIC_AUTH_ERROR };
   }
 
-  const { token, expiresAt } = await createSession(user.id);
+  const ctx = await resolveAuthContext(user.id);
+  if (!ctx) {
+    return { success: false, error: 'No active organization membership' };
+  }
+
+  const membershipId = ctx.membership?.id;
+  const { token, expiresAt } = await createSession(user.id, membershipId);
   await setSessionCookie(token, expiresAt);
 
-  return { success: true, user: toAuthUser(user) };
+  return { success: true, ctx };
 }
 
 export async function registerUser(data: {
@@ -93,26 +81,68 @@ export async function registerUser(data: {
     return { success: false, error: passwordCheck.message || 'Password is too weak' };
   }
 
+  const email = data.email.toLowerCase().trim();
+
   const existingUser = await prisma.user.findUnique({
-    where: { email: data.email.toLowerCase().trim() },
+    where: { email },
   });
 
   if (existingUser) {
     return { success: false, error: 'An account with this email already exists' };
   }
 
+  const isFirstUser = (await prisma.user.count()) === 0;
   const passwordHash = await hashPassword(data.password);
 
   const user = await prisma.user.create({
     data: {
       name: data.name.trim(),
-      email: data.email.toLowerCase().trim(),
+      email,
       passwordHash,
       status: 'PENDING',
+      isSuperAdmin: isFirstUser,
     },
   });
 
-  return { success: true, user: toAuthUser(user) };
+  // Create default organization and membership for the registering user.
+  const organizationName = `${data.name.trim()}'s Organization`;
+  const slugBase = email.split('@')[0].replace(/[^a-z0-9]/gi, '-').toLowerCase();
+  const slug = `${slugBase}-${Date.now().toString(36)}`;
+
+  const organization = await prisma.organization.create({
+    data: {
+      name: organizationName,
+      slug,
+      status: 'ACTIVE',
+    },
+  });
+
+  const clientAdminRole = await prisma.role.findUnique({
+    where: { name: 'CLIENT_ADMIN' },
+  });
+
+  if (!clientAdminRole) {
+    return { success: false, error: 'Default organization role not found' };
+  }
+
+  const membership = await prisma.organizationMembership.create({
+    data: {
+      userId: user.id,
+      organizationId: organization.id,
+      roleId: clientAdminRole.id,
+      status: 'ACTIVE',
+    },
+  });
+
+  const ctx = await resolveAuthContext(user.id, membership.id);
+  if (!ctx) {
+    return { success: false, error: 'Failed to resolve auth context' };
+  }
+
+  const { token, expiresAt } = await createSession(user.id, membership.id);
+  await setSessionCookie(token, expiresAt);
+
+  return { success: true, ctx };
 }
 
 export async function logoutUser(): Promise<{ success: boolean }> {
@@ -124,17 +154,18 @@ export async function logoutUser(): Promise<{ success: boolean }> {
   return { success: true };
 }
 
-export async function getCurrentUser(): Promise<AuthUser | null> {
+export async function getCurrentUser(): Promise<AuthenticatedContext | null> {
   const token = await getSessionToken();
-  const user = await getUserFromSession(token);
-  if (!user) return null;
-  return toAuthUser(user);
+  const session = await getSession(token);
+  if (!session) return null;
+
+  return resolveAuthContext(session.user.id, session.membershipId ?? undefined);
 }
 
-export async function requireAuth(): Promise<AuthUser> {
-  const user = await getCurrentUser();
-  if (!user) {
+export async function requireAuth(): Promise<AuthenticatedContext> {
+  const ctx = await getCurrentUser();
+  if (!ctx) {
     throw new Error('Unauthorized');
   }
-  return user;
+  return ctx;
 }

@@ -23,12 +23,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      user: {
-        id: result.user.id,
-        name: result.user.name,
-        email: result.user.email,
-        status: result.user.status,
-      },
+      ctx: result.ctx,
     });
   } catch (error) {
     console.error('Registration error:', error);
