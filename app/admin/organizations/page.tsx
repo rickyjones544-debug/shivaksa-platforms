@@ -10,7 +10,7 @@ export default async function AdminOrganizationsPage() {
     redirect('/login?redirect=/admin/organizations');
   }
 
-  if (!hasPermission(ctx, 'admin', 'read', 'organizations')) {
+  if (!hasPermission(ctx, 'organization', 'read')) {
     redirect('/admin');
   }
 

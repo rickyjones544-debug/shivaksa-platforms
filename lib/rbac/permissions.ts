@@ -36,6 +36,19 @@ const adminPermissions: PermissionDefinition[] = [
   { scope: 'admin', action: 'write', resource: 'settings', description: 'Manage platform settings' },
 ];
 
+// Organization self-management (available to organization admins, not platform-only)
+const organizationPermissions: PermissionDefinition[] = [
+  { scope: 'organization', action: 'read', description: 'Read own organization details' },
+  { scope: 'organization', action: 'write', description: 'Update own organization details' },
+  { scope: 'organization', action: 'delete', description: 'Delete own organization' },
+  { scope: 'membership', action: 'read', description: 'Read organization memberships' },
+  { scope: 'membership', action: 'write', description: 'Manage organization memberships' },
+  { scope: 'membership', action: 'delete', description: 'Delete organization memberships' },
+  { scope: 'invitation', action: 'read', description: 'Read organization invitations' },
+  { scope: 'invitation', action: 'write', description: 'Create organization invitations' },
+  { scope: 'invitation', action: 'delete', description: 'Revoke organization invitations' },
+];
+
 // CRM module
 const crmPermissions: PermissionDefinition[] = [
   { scope: 'crm', action: 'manage', description: 'Full CRM management' },
@@ -126,6 +139,7 @@ const voipPermissions: PermissionDefinition[] = [
 
 export const allPermissions: PermissionDefinition[] = [
   ...adminPermissions,
+  ...organizationPermissions,
   ...crmPermissions,
   ...bpoPermissions,
   ...qaPermissions,

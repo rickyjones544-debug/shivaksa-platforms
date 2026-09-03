@@ -107,16 +107,17 @@ model Role {
   @@map("roles")
 }
 
-// Permission definition. scope + action (+ optional resource) form the permission key.
+// Permission definition. `key` is the canonical stable identifier used for
+// lookups and assignment. scope/action/resource remain for documentation/grouping.
 model Permission {
   id       String  @id @default(dbgenerated("gen_random_uuid()"))
+  key      String  @unique // canonical key, e.g. "crm:read:contacts"
   scope    String  // e.g. "crm", "bpo", "admin"
   action   String  // e.g. "read", "write", "delete", "manage"
   resource String? // e.g. "leads", "contacts"; null means all resources in scope
 
   roles RolePermission[]
 
-  @@unique([scope, action, resource])
   @@index([scope])
   @@map("permissions")
 }

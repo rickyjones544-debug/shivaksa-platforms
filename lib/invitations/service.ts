@@ -124,14 +124,14 @@ export async function revokeInvitation(ctx: AuthenticatedContext, organizationId
 }
 
 async function ensureOrganizationAccess(ctx: AuthenticatedContext, organizationId: string) {
-  if (ctx.user.isSuperAdmin) {
-    const org = await prisma.organization.findUnique({ where: { id: organizationId } });
-    if (!org) throw new Error('Organization not found');
-    return org;
+  const org = await prisma.organization.findUnique({ where: { id: organizationId } });
+  if (!org) throw new Error('Organization not found');
+
+  if (!ctx.user.isSuperAdmin) {
+    if (!ctx.organization || ctx.organization.id !== organizationId) {
+      throw new Error('Not found');
+    }
   }
-  const org = await prisma.organization.findFirst({
-    where: tenantWhere(ctx, { id: organizationId }),
-  });
-  assertTenantOwnership(org, ctx);
+
   return org;
 }

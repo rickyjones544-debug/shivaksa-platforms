@@ -9,9 +9,8 @@ interface RouteParams {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   return withAdminAuth(request, {
-    scope: 'admin',
+    scope: 'membership',
     action: 'read',
-    resource: 'users',
     handler: async (ctx) => listMemberships(ctx, id),
   });
 }
@@ -20,9 +19,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   const body = await readBody<MembershipInput>(request);
   return withAdminAuth(request, {
-    scope: 'admin',
+    scope: 'membership',
     action: 'write',
-    resource: 'users',
     handler: async (ctx) => createMembership(ctx, id, body),
   });
 }

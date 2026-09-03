@@ -1,4 +1,4 @@
-import { allPermissions, permissionKey, type PermissionDefinition } from './permissions';
+import { allPermissions, permissionKey } from './permissions';
 
 export type SystemRole =
   | 'SUPER_ADMIN'
@@ -15,10 +15,6 @@ export interface RoleDefinition {
   description: string;
   isSystem: true;
   permissions: string[]; // formatted permission keys
-}
-
-function keys(...perms: PermissionDefinition[]): string[] {
-  return perms.map((p) => permissionKey(p.scope, p.action, p.resource));
 }
 
 // Helper to collect all permission keys from a set of scopes/actions.
@@ -42,7 +38,7 @@ export const systemRoles: RoleDefinition[] = [
     name: 'OPERATIONS_MANAGER',
     description: 'Manages platform operations across organizations',
     isSystem: true,
-    permissions: allInScopes(['admin', 'bpo', 'qa', 'reports', 'ai', 'voip']),
+    permissions: allInScopes(['admin', 'organization', 'membership', 'invitation', 'bpo', 'qa', 'reports', 'ai', 'voip']),
   },
   {
     name: 'QA_MANAGER',
@@ -61,6 +57,9 @@ export const systemRoles: RoleDefinition[] = [
     description: 'Client organization administrator with full access within their tenant',
     isSystem: true,
     permissions: allInScopes([
+      'organization',
+      'membership',
+      'invitation',
       'crm',
       'bpo',
       'qa',

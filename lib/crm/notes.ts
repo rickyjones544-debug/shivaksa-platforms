@@ -9,8 +9,6 @@ export type NoteInput = {
   campaignId?: string | null;
 };
 
-type ParentRecord = { organizationId: string };
-
 export async function listNotes(ctx: AuthenticatedContext, filters?: { contactId?: string; leadId?: string; campaignId?: string }) {
   return prisma.note.findMany({
     where: tenantWhere(ctx, {

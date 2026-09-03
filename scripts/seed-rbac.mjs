@@ -26,6 +26,17 @@ const allPermissions = [
   { scope: 'admin', action: 'read', resource: 'settings' },
   { scope: 'admin', action: 'write', resource: 'settings' },
 
+  // Organization self-management
+  { scope: 'organization', action: 'read' },
+  { scope: 'organization', action: 'write' },
+  { scope: 'organization', action: 'delete' },
+  { scope: 'membership', action: 'read' },
+  { scope: 'membership', action: 'write' },
+  { scope: 'membership', action: 'delete' },
+  { scope: 'invitation', action: 'read' },
+  { scope: 'invitation', action: 'write' },
+  { scope: 'invitation', action: 'delete' },
+
   // CRM
   { scope: 'crm', action: 'manage' },
   { scope: 'crm', action: 'read', resource: 'contacts' },
@@ -110,13 +121,13 @@ const systemRoles = [
     name: 'SUPER_ADMIN',
     description: 'Platform-wide super administrator with unrestricted access',
     permissions: allInScopes([
-      'admin', 'crm', 'bpo', 'qa', 'reports', 'billing', 'development', 'ai', 'voip',
+      'admin', 'organization', 'membership', 'invitation', 'crm', 'bpo', 'qa', 'reports', 'billing', 'development', 'ai', 'voip',
     ]),
   },
   {
     name: 'OPERATIONS_MANAGER',
     description: 'Manages platform operations across organizations',
-    permissions: allInScopes(['admin', 'bpo', 'qa', 'reports', 'ai', 'voip']),
+    permissions: allInScopes(['admin', 'organization', 'membership', 'invitation', 'bpo', 'qa', 'reports', 'ai', 'voip']),
   },
   {
     name: 'QA_MANAGER',
@@ -132,14 +143,14 @@ const systemRoles = [
     name: 'CLIENT_ADMIN',
     description: 'Client organization administrator with full access within their tenant',
     permissions: allInScopes([
-      'crm', 'bpo', 'qa', 'reports', 'billing', 'development', 'ai', 'voip',
+      'organization', 'membership', 'invitation', 'crm', 'bpo', 'qa', 'reports', 'billing', 'development', 'ai', 'voip',
     ]),
   },
   {
     name: 'CLIENT_VIEWER',
     description: 'Read-only access within the client organization',
     permissions: allInScopes(
-      ['crm', 'bpo', 'qa', 'reports', 'billing', 'development', 'ai', 'voip'],
+      ['organization', 'membership', 'invitation', 'crm', 'bpo', 'qa', 'reports', 'billing', 'development', 'ai', 'voip'],
       ['read']
     ),
   },
@@ -168,24 +179,16 @@ async function seed() {
   for (const perm of allPermissions) {
     const key = permissionKey(perm.scope, perm.action, perm.resource);
 
-    // findFirst because Prisma does not allow null in composite unique where clauses.
-    let existing = await prisma.permission.findFirst({
-      where: {
+    const existing = await prisma.permission.upsert({
+      where: { key },
+      update: {},
+      create: {
+        key,
         scope: perm.scope,
         action: perm.action,
         resource: perm.resource ?? null,
       },
     });
-
-    if (!existing) {
-      existing = await prisma.permission.create({
-        data: {
-          scope: perm.scope,
-          action: perm.action,
-          resource: perm.resource ?? null,
-        },
-      });
-    }
 
     permissionMap.set(key, existing.id);
     console.log(`  Permission: ${key}`);

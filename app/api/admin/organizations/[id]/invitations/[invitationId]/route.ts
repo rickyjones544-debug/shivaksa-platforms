@@ -9,9 +9,8 @@ interface RouteParams {
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const { id, invitationId } = await params;
   return withAdminAuth(request, {
-    scope: 'admin',
-    action: 'write',
-    resource: 'users',
+    scope: 'invitation',
+    action: 'delete',
     handler: async (ctx) => revokeInvitation(ctx, id, invitationId),
   });
 }

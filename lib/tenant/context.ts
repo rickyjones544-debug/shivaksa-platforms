@@ -57,11 +57,7 @@ export async function resolveAuthContext(
   }
 
   const permissions = membership
-    ? membership.role.permissions.map((rp) =>
-        rp.permission.resource
-          ? `${rp.permission.scope}:${rp.permission.action}:${rp.permission.resource}`
-          : `${rp.permission.scope}:${rp.permission.action}`
-      )
+    ? membership.role.permissions.map((rp) => rp.permission.key)
     : [];
 
   return {

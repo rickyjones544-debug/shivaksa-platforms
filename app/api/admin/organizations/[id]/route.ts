@@ -9,9 +9,8 @@ interface RouteParams {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   return withAdminAuth(request, {
-    scope: 'admin',
+    scope: 'organization',
     action: 'read',
-    resource: 'organizations',
     handler: async (ctx) => getOrganization(ctx, id),
   });
 }
@@ -20,9 +19,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   const body = await readBody<Partial<OrganizationInput>>(request);
   return withAdminAuth(request, {
-    scope: 'admin',
+    scope: 'organization',
     action: 'write',
-    resource: 'organizations',
     handler: async (ctx) => updateOrganization(ctx, id, body),
   });
 }
