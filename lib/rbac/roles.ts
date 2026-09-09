@@ -38,7 +38,7 @@ export const systemRoles: RoleDefinition[] = [
     name: 'OPERATIONS_MANAGER',
     description: 'Manages platform operations across organizations',
     isSystem: true,
-    permissions: allInScopes(['admin', 'organization', 'membership', 'invitation', 'bpo', 'qa', 'reports', 'ai', 'voip']),
+    permissions: allInScopes(['admin', 'organization', 'membership', 'invitation', 'bpo', 'qa', 'reports', 'ai', 'voip', 'wallet', 'audit']),
   },
   {
     name: 'QA_MANAGER',
@@ -68,6 +68,7 @@ export const systemRoles: RoleDefinition[] = [
       'development',
       'ai',
       'voip',
+      'wallet',
     ]),
   },
   {
@@ -75,7 +76,7 @@ export const systemRoles: RoleDefinition[] = [
     description: 'Read-only access within the client organization',
     isSystem: true,
     permissions: allInScopes(
-      ['crm', 'bpo', 'qa', 'reports', 'billing', 'development', 'ai', 'voip'],
+      ['crm', 'bpo', 'qa', 'reports', 'billing', 'development', 'ai', 'voip', 'wallet'],
       ['read']
     ),
   },

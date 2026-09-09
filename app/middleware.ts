@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 // Paths that require authentication
-const PROTECTED_PATHS = ['/admin', '/agent', '/client'];
+const PROTECTED_PATHS = ['/admin', '/agent', '/client', '/voip'];
 
 // Paths that should not be accessed by authenticated users (e.g., login)
 const AUTH_PATHS = ['/login', '/register', '/reset-password'];
@@ -42,6 +42,8 @@ export const config = {
     '/agent/:path*',
     '/client',
     '/client/:path*',
+    '/voip',
+    '/voip/:path*',
     '/login',
     '/register',
     '/reset-password',

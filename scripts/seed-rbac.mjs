@@ -106,8 +106,20 @@ const allPermissions = [
   { scope: 'voip', action: 'manage' },
   { scope: 'voip', action: 'read', resource: 'numbers' },
   { scope: 'voip', action: 'write', resource: 'numbers' },
+  { scope: 'voip', action: 'delete', resource: 'numbers' },
   { scope: 'voip', action: 'read', resource: 'calls' },
   { scope: 'voip', action: 'write', resource: 'calls' },
+  { scope: 'voip', action: 'read', resource: 'sip' },
+  { scope: 'voip', action: 'write', resource: 'sip' },
+
+  // Wallet / prepaid balance
+  { scope: 'wallet', action: 'manage' },
+  { scope: 'wallet', action: 'read' },
+  { scope: 'wallet', action: 'write' },
+
+  // Audit logging
+  { scope: 'audit', action: 'manage' },
+  { scope: 'audit', action: 'read' },
 ];
 
 function allInScopes(scopes, actions = ['read', 'write', 'delete', 'manage']) {
@@ -121,13 +133,13 @@ const systemRoles = [
     name: 'SUPER_ADMIN',
     description: 'Platform-wide super administrator with unrestricted access',
     permissions: allInScopes([
-      'admin', 'organization', 'membership', 'invitation', 'crm', 'bpo', 'qa', 'reports', 'billing', 'development', 'ai', 'voip',
+      'admin', 'organization', 'membership', 'invitation', 'crm', 'bpo', 'qa', 'reports', 'billing', 'development', 'ai', 'voip', 'wallet', 'audit',
     ]),
   },
   {
     name: 'OPERATIONS_MANAGER',
     description: 'Manages platform operations across organizations',
-    permissions: allInScopes(['admin', 'organization', 'membership', 'invitation', 'bpo', 'qa', 'reports', 'ai', 'voip']),
+    permissions: allInScopes(['admin', 'organization', 'membership', 'invitation', 'bpo', 'qa', 'reports', 'ai', 'voip', 'wallet', 'audit']),
   },
   {
     name: 'QA_MANAGER',
@@ -143,14 +155,14 @@ const systemRoles = [
     name: 'CLIENT_ADMIN',
     description: 'Client organization administrator with full access within their tenant',
     permissions: allInScopes([
-      'organization', 'membership', 'invitation', 'crm', 'bpo', 'qa', 'reports', 'billing', 'development', 'ai', 'voip',
+      'organization', 'membership', 'invitation', 'crm', 'bpo', 'qa', 'reports', 'billing', 'development', 'ai', 'voip', 'wallet',
     ]),
   },
   {
     name: 'CLIENT_VIEWER',
     description: 'Read-only access within the client organization',
     permissions: allInScopes(
-      ['organization', 'membership', 'invitation', 'crm', 'bpo', 'qa', 'reports', 'billing', 'development', 'ai', 'voip'],
+      ['organization', 'membership', 'invitation', 'crm', 'bpo', 'qa', 'reports', 'billing', 'development', 'ai', 'voip', 'wallet'],
       ['read']
     ),
   },

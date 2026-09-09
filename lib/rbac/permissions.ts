@@ -133,8 +133,24 @@ const voipPermissions: PermissionDefinition[] = [
   { scope: 'voip', action: 'manage', description: 'Full VoIP management' },
   { scope: 'voip', action: 'read', resource: 'numbers', description: 'Read phone numbers' },
   { scope: 'voip', action: 'write', resource: 'numbers', description: 'Manage phone numbers' },
-  { scope: 'voip', action: 'read', resource: 'calls', description: 'Read VoIP call logs' },
+  { scope: 'voip', action: 'delete', resource: 'numbers', description: 'Delete phone numbers' },
+  { scope: 'voip', action: 'read', resource: 'calls', description: 'Read VoIP call logs and CDR' },
   { scope: 'voip', action: 'write', resource: 'calls', description: 'Initiate/manage calls' },
+  { scope: 'voip', action: 'read', resource: 'sip', description: 'Read SIP accounts' },
+  { scope: 'voip', action: 'write', resource: 'sip', description: 'Manage SIP accounts' },
+];
+
+// Wallet / prepaid balance
+const walletPermissions: PermissionDefinition[] = [
+  { scope: 'wallet', action: 'manage', description: 'Full wallet management' },
+  { scope: 'wallet', action: 'read', description: 'Read wallet and ledger' },
+  { scope: 'wallet', action: 'write', description: 'Credit, debit, refund, and adjust wallet' },
+];
+
+// Audit logging
+const auditPermissions: PermissionDefinition[] = [
+  { scope: 'audit', action: 'manage', description: 'Full audit log management' },
+  { scope: 'audit', action: 'read', description: 'Read audit logs' },
 ];
 
 export const allPermissions: PermissionDefinition[] = [
@@ -148,4 +164,6 @@ export const allPermissions: PermissionDefinition[] = [
   ...developmentPermissions,
   ...aiPermissions,
   ...voipPermissions,
+  ...walletPermissions,
+  ...auditPermissions,
 ];

@@ -38,6 +38,11 @@ model User {
   createdCampaigns Campaign[]
   createdNotes    Note[]
 
+  // VoIP relations
+  walletTransactions WalletTransaction[] @relation("WalletTransactionCreator")
+  auditLogs         AuditLog[] @relation("AuditLogActor")
+  notifications     Notification[]
+
   @@index([email])
   @@index([status])
   @@index([isSuperAdmin])
@@ -61,6 +66,15 @@ model Organization {
   leads     Lead[]
   campaigns Campaign[]
   notes     Note[]
+
+  // VoIP relations
+  voipService  VoipService?
+  wallet       Wallet?
+  sipAccounts  SipAccount[]
+  phoneNumbers PhoneNumber[]
+  voipCalls    VoipCall[]
+  notifications Notification[]
+  auditLogs    AuditLog[]
 
   @@index([slug])
   @@index([status])
@@ -319,4 +333,247 @@ model Invitation {
   @@index([organizationId])
   @@index([email])
   @@map("invitations")
+}
+
+// ============================================================================
+// VoIP Module — Multi-tenant reseller calling, SIP, wallet, billing, CDR
+// ============================================================================
+
+model VoipService {
+  id                     String   @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId         String   @unique @map("organization_id")
+  status                 String   @default("ACTIVE") // ACTIVE, LOW_BALANCE, ZERO_BALANCE
+  isAdminSuspended       Boolean  @default(false) @map("is_admin_suspended")
+  customerRate           Decimal  @default(0.016) @map("customer_rate") @db.Decimal(12, 6)
+  billingIncrementSeconds Int     @default(60) @map("billing_increment_seconds")
+  minimumBillableSeconds  Int     @default(60) @map("minimum_billable_seconds")
+  reserveMinutes         Int      @default(5) @map("reserve_minutes")
+  lowBalanceThresholds   Int[]    @map("low_balance_thresholds")
+  maxCallDurationMinutes Int      @default(60) @map("max_call_duration_minutes")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([isAdminSuspended])
+  @@map("voip_services")
+}
+
+model Wallet {
+  id           String   @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId String @unique @map("organization_id")
+  balance      Decimal @default(0) @db.Decimal(12, 4)
+  reserved     Decimal @default(0) @db.Decimal(12, 4)
+  currency     String   @default("USD")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  transactions  WalletTransaction[]
+  reservations  WalletReservation[]
+
+  @@index([organizationId])
+  @@map("wallets")
+}
+
+model WalletTransaction {
+  id             String   @id @default(dbgenerated("gen_random_uuid()"))
+  walletId       String   @map("wallet_id")
+  type           String   // CREDIT, DEBIT, REFUND, ADJUSTMENT
+  amount         Decimal  @db.Decimal(12, 4) // signed: positive for credit, negative for debit
+  balanceAfter   Decimal  @map("balance_after") @db.Decimal(12, 4)
+  description    String?
+  reference      String?  // internal call id, invoice id, etc.
+  metadata       Json?
+  createdById    String?  @map("created_by_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  wallet    Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  createdBy User?  @relation("WalletTransactionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([walletId])
+  @@index([createdAt])
+  @@index([type])
+  @@map("wallet_transactions")
+}
+
+model WalletReservation {
+  id          String    @id @default(dbgenerated("gen_random_uuid()"))
+  walletId    String    @map("wallet_id")
+  callId      String?   @unique @map("call_id")
+  amount      Decimal   @db.Decimal(12, 4)
+  status      String    @default("ACTIVE") // ACTIVE, RELEASED, CONSUMED
+  description String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  expiresAt   DateTime? @map("expires_at")
+  releasedAt  DateTime? @map("released_at")
+
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  call   VoipCall? @relation(fields: [callId], references: [id], onDelete: SetNull)
+
+  @@index([walletId])
+  @@index([callId])
+  @@index([status])
+  @@map("wallet_reservations")
+}
+
+model SipAccount {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId       String   @map("organization_id")
+  username             String
+  passwordCipher       String   @map("password_cipher")
+  passwordTag          String   @map("password_tag")
+  passwordIv           String   @map("password_iv")
+  domain               String
+  status               String   @default("ACTIVE") // ACTIVE, DISABLED
+  maxConcurrentCalls   Int      @default(1) @map("max_concurrent_calls")
+  callerId             String?  @map("caller_id")
+  providerConnectionId String?  @map("provider_connection_id")
+  providerConfig       Json?    @map("provider_config")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  calls         VoipCall[]
+  phoneNumbers  PhoneNumber[]
+
+  @@unique([organizationId, username])
+  @@index([organizationId])
+  @@index([status])
+  @@index([providerConnectionId])
+  @@map("sip_accounts")
+}
+
+model PhoneNumber {
+  id               String   @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId   String   @map("organization_id")
+  sipAccountId     String?  @map("sip_account_id")
+  number               String   // E.164
+  displayNumber        String?  @map("display_number")
+  status               String   @default("ACTIVE") // ACTIVE, INACTIVE
+  provider             String   @default("telnyx")
+  providerNumberId     String?  @map("provider_number_id")
+  providerConnectionId String?  @map("provider_connection_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sipAccount   SipAccount?  @relation(fields: [sipAccountId], references: [id], onDelete: SetNull)
+  calls        VoipCall[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId])
+  @@index([number])
+  @@index([sipAccountId])
+  @@index([providerNumberId])
+  @@index([providerConnectionId])
+  @@map("phone_numbers")
+}
+
+model VoipCall {
+  id               String    @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId   String    @map("organization_id")
+  sipAccountId     String?   @map("sip_account_id")
+  phoneNumberId    String?   @map("phone_number_id")
+  direction        String    // INBOUND, OUTBOUND
+  callerId         String    @map("caller_id")
+  destination      String
+  status           String    @default("INITIATED") // INITIATED, RINGING, ANSWERED, COMPLETED, BUSY, NO_ANSWER, FAILED, REJECTED, CANCELLED
+  provider         String    @default("telnyx")
+  providerCallId   String?   @map("provider_call_id")
+  startTime        DateTime? @map("start_time")
+  answerTime       DateTime? @map("answer_time")
+  endTime          DateTime? @map("end_time")
+  durationSeconds  Int?      @map("duration_seconds")
+  billableSeconds  Int?      @map("billable_seconds")
+  billedMinutes    Decimal?  @map("billed_minutes") @db.Decimal(12, 4)
+  customerRate     Decimal   @map("customer_rate") @db.Decimal(12, 6)
+  customerCharge   Decimal?  @map("customer_charge") @db.Decimal(12, 4)
+  wholesaleCost    Decimal?  @map("wholesale_cost") @db.Decimal(12, 4)
+  grossProfit      Decimal?  @map("gross_profit") @db.Decimal(12, 4)
+  failureReason    String?   @map("failure_reason")
+  routingInfo      Json?     @map("routing_info")
+  reservationId    String?   @map("reservation_id")
+  billingProcessed Boolean   @default(false) @map("billing_processed")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  organization  Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sipAccount    SipAccount?         @relation(fields: [sipAccountId], references: [id], onDelete: SetNull)
+  phoneNumber   PhoneNumber?      @relation(fields: [phoneNumberId], references: [id], onDelete: SetNull)
+  reservation   WalletReservation?
+  webhookEvents WebhookEvent[]
+
+  @@index([organizationId])
+  @@index([sipAccountId])
+  @@index([phoneNumberId])
+  @@index([provider, providerCallId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([destination])
+  @@index([startTime])
+  @@map("voip_calls")
+}
+
+model WebhookEvent {
+  id               String    @id @default(dbgenerated("gen_random_uuid()"))
+  provider         String
+  providerEventId    String    @map("provider_event_id")
+  eventType        String    @map("event_type")
+  payload          Json
+  status           String    @default("PENDING") // PENDING, PROCESSED, FAILED
+  callId           String?   @map("call_id")
+  processedAt      DateTime? @map("processed_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  call VoipCall? @relation(fields: [callId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, providerEventId])
+  @@index([provider, providerEventId])
+  @@index([callId])
+  @@index([status])
+  @@map("webhook_events")
+}
+
+model Notification {
+  id               String   @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId   String   @map("organization_id")
+  userId           String?  @map("user_id")
+  type             String
+  thresholdMinutes Int?     @map("threshold_minutes")
+  message          String
+  sentAt           DateTime @default(now()) @map("sent_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([type])
+  @@index([sentAt])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id             String    @id @default(dbgenerated("gen_random_uuid()"))
+  actorId        String?   @map("actor_id")
+  organizationId String?   @map("organization_id")
+  action         String
+  resource       String
+  resourceId     String?   @map("resource_id")
+  metadata       Json?
+  ipAddress      String?   @map("ip_address")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  actor        User?         @relation("AuditLogActor", fields: [actorId], references: [id], onDelete: SetNull)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([actorId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
 }
