@@ -8,6 +8,8 @@
     "build": "next build",
     "start": "next start",
     "postinstall": "prisma generate --schema /home/shivjhtl/repositories/shivaksa-platforms/prisma/schema.prisma",
+    "migrate:prod": "node scripts/migrate-prod.cjs",
+    "verify:tables": "node scripts/verify-tables.cjs",
     "lint": "eslint",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\""
   },
