@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "postinstall": "prisma generate --schema prisma/schema.prisma",
+    "postinstall": "prisma generate --schema /home/shivjhtl/repositories/shivaksa-platforms/prisma/schema.prisma",
     "lint": "eslint",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\""
   },
