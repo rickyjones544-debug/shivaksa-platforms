@@ -12,6 +12,7 @@ import {
 import { consumeReservation, releaseReservation, addDebit } from './wallet';
 import { getOrCreateVoipService } from './customers';
 import { audit } from './audit';
+import { assertVoipEligibility } from './eligibility';
 import type { AuthenticatedContext } from '@/lib/rbac/authorization';
 
 export interface InitiateOutboundCallInput {
@@ -23,6 +24,10 @@ export async function initiateOutboundCall(
   ctx: AuthenticatedContext,
   input: InitiateOutboundCallInput
 ): Promise<OutboundAuthorization & { providerCallId: string | null }> {
+  if (!ctx.organization) {
+    throw new Error('No active organization');
+  }
+  await assertVoipEligibility(ctx.organization.id);
   const authorization = await authorizeOutboundCall(ctx, input.sipAccountId, input.destination);
 
   const sipAccount = await prisma.sipAccount.findUnique({
@@ -196,10 +201,15 @@ async function reconcileCallBilling(call: { id: string; status: string; organiza
   let walletUpdate = null;
   if (call.reservationId && call.direction === 'OUTBOUND') {
     walletUpdate = await consumeReservation(call.reservationId, customerCharge);
-    await addDebit(call.organizationId, customerCharge, `Call ${call.id}`, call.id);
   } else if (call.direction === 'OUTBOUND') {
     // No reservation (legacy/manual path) — debit directly.
-    await addDebit(call.organizationId, customerCharge, `Call ${call.id}`, call.id);
+    walletUpdate = await addDebit(
+      call.organizationId,
+      customerCharge,
+      `Call ${call.id}`,
+      call.id,
+      `call:${call.id}:debit`
+    );
   }
 
   // Inbound billing is left configurable; do not debit by default.

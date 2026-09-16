@@ -5,9 +5,16 @@ import {
 } from '@/lib/auth/password-reset';
 import { validatePasswordStrength } from '@/lib/auth/password';
 import { validateResetRequest, validateResetConfirm } from '@/lib/auth/validation';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
   try {
+    if (!checkRateLimit(request, 'reset-password', 5, 60 * 60 * 1000)) {
+      return NextResponse.json(
+        { success: false, error: 'Too many reset attempts. Please try again later.' },
+        { status: 429 }
+      );
+    }
     const body = await request.json();
 
     // Handle reset request (email only)

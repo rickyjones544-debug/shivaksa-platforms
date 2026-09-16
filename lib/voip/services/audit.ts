@@ -28,7 +28,11 @@ export type AuditAction =
   | 'NOTIFICATION_SENT'
   | 'WEBHOOK_PROCESSED'
   | 'WEBHOOK_DUPLICATE'
-  | 'SERVICE_STATUS_CHANGED';
+  | 'SERVICE_STATUS_CHANGED'
+  | 'KYC_RECORD_UPDATED'
+  | 'KYC_RECORD_SUBMITTED'
+  | 'KYC_RECORD_REVIEWED'
+  | 'KYC_DOCUMENT_UPLOADED';
 
 export async function audit(
   ctx: AuthenticatedContext | null,

@@ -1,0 +1,4 @@
+-- Add idempotency key to wallet transactions for duplicate-safe financial operations.
+
+ALTER TABLE "wallet_transactions" ADD COLUMN "idempotency_key" TEXT;
+CREATE UNIQUE INDEX "wallet_transactions_idempotency_key_key" ON "wallet_transactions"("idempotency_key");

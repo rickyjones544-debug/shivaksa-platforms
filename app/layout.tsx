@@ -14,8 +14,15 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Shivaksa Platform - BPO, AI Calling, VoIP, CRM & Development",
-  description: "Production-grade multi-tenant platform for BPO services, AI voice calling, VoIP, CRM, and software development by Shivaksa Technologies LLC.",
+  title: {
+    default: "Shivaksa Technologies LLC",
+    template: "%s | Shivaksa Technologies LLC",
+  },
+  description:
+    "Shivaksa Technologies LLC provides secure BPO, AI voice agents, business VoIP/SIP, lead generation, and web & mobile technology solutions.",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

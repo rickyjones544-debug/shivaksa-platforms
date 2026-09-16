@@ -22,7 +22,6 @@ export function toAdminSipAccountDto(account: {
     callerId: account.callerId,
     maxConcurrentCalls: account.maxConcurrentCalls,
     providerConnectionId: account.providerConnectionId,
-    providerConfig: account.providerConfig,
     numbers: account.phoneNumbers?.map((n) => n.number) || [],
     createdAt: account.createdAt.toISOString(),
     updatedAt: account.updatedAt.toISOString(),

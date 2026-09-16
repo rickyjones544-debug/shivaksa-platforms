@@ -19,20 +19,37 @@ interface CustomerDetail {
   } | null;
 }
 
+interface Transaction {
+  id: string;
+  type: string;
+  amount: string;
+  balanceAfter: string;
+  description: string | null;
+  reference: string | null;
+  createdAt: string;
+}
+
 export default function VoipCustomerDetailPage() {
   const params = useParams();
   const id = params.id as string;
   const [customer, setCustomer] = useState<CustomerDetail | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`/api/voip/admin/customers/${id}`, { credentials: 'include' })
-      .then((res) => res.json())
-      .then((json) => {
-        if (!json.success) throw new Error(json.error);
-        setCustomer(json.data);
+    Promise.all([
+      fetch(`/api/voip/admin/customers/${id}`, { credentials: 'include' }).then((r) => r.json()),
+      fetch(`/api/voip/admin/customers/${id}/wallet/transactions?take=50`, {
+        credentials: 'include',
+      }).then((r) => r.json()),
+    ])
+      .then(([customerJson, txJson]) => {
+        if (!customerJson.success) throw new Error(customerJson.error);
+        if (!txJson.success) throw new Error(txJson.error);
+        setCustomer(customerJson.data);
+        setTransactions(txJson.data || []);
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load'))
       .finally(() => setLoading(false));
@@ -61,7 +78,11 @@ export default function VoipCustomerDetailPage() {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount: parseFloat(amount), description: 'Admin credit' }),
+      body: JSON.stringify({
+        amount: parseFloat(amount),
+        description: 'Admin credit',
+        idempotencyKey: crypto.randomUUID(),
+      }),
     });
     const json = await res.json();
     if (json.success) {
@@ -173,6 +194,36 @@ export default function VoipCustomerDetailPage() {
             Add Credit
           </button>
         </form>
+      </section>
+
+      <section className="rounded-lg border p-4 space-y-4">
+        <h2 className="text-lg font-semibold">Wallet Transactions</h2>
+        {transactions.length === 0 ? (
+          <p className="text-gray-500">No transactions yet.</p>
+        ) : (
+          <table className="w-full text-sm text-left">
+            <thead className="border-b">
+              <tr>
+                <th className="py-2">Date</th>
+                <th className="py-2">Type</th>
+                <th className="py-2">Amount</th>
+                <th className="py-2">Balance After</th>
+                <th className="py-2">Reference</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map((tx) => (
+                <tr key={tx.id} className="border-b">
+                  <td className="py-2">{new Date(tx.createdAt).toLocaleString()}</td>
+                  <td className="py-2">{tx.type}</td>
+                  <td className="py-2">${parseFloat(tx.amount).toFixed(4)}</td>
+                  <td className="py-2">${parseFloat(tx.balanceAfter).toFixed(4)}</td>
+                  <td className="py-2">{tx.reference || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </section>
 
       <section className="flex gap-4">

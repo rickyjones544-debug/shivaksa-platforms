@@ -49,7 +49,7 @@ export default function LoginForm() {
       <div className="w-full max-w-md bg-white dark:bg-zinc-900 rounded-2xl shadow-lg p-8">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-zinc-900 dark:text-white">
-            Shivaksa Platform
+            Shivaksa Technologies LLC
           </h1>
           <p className="mt-2 text-zinc-600 dark:text-zinc-400">
             Sign in to your account

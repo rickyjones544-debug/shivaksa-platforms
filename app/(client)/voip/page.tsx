@@ -13,7 +13,6 @@ interface SipAccount {
   id: string;
   username: string;
   domain: string;
-  password: string;
   status: string;
   callerId: string | null;
   numbers: string[];
@@ -38,8 +37,10 @@ interface Service {
   maxCallDurationMinutes: number;
 }
 
-function formatCurrency(value: string) {
-  return `$${parseFloat(value).toFixed(2)}`;
+function formatCurrency(value: string, digits = 2) {
+  const n = parseFloat(value);
+  if (Number.isNaN(n)) return '$0.00';
+  return `$${n.toFixed(digits)}`;
 }
 
 function estimatedMinutes(available: string, rate: string) {
@@ -49,6 +50,28 @@ function estimatedMinutes(available: string, rate: string) {
   return Math.floor(avail / r).toLocaleString();
 }
 
+function statusMessage(status: string) {
+  switch (status) {
+    case 'LOW_BALANCE':
+      return {
+        text: 'Your balance is low. Add funds soon to avoid service interruption.',
+        color: 'text-amber-600',
+      };
+    case 'ZERO_BALANCE':
+      return {
+        text: 'Your balance is depleted. Please add funds to continue calling.',
+        color: 'text-red-600',
+      };
+    case 'SUSPENDED':
+      return {
+        text: 'Service is suspended. Contact support for assistance.',
+        color: 'text-red-600',
+      };
+    default:
+      return null;
+  }
+}
+
 export default function VoipDashboardPage() {
   const [service, setService] = useState<Service | null>(null);
   const [wallet, setWallet] = useState<Wallet | null>(null);
@@ -56,8 +79,6 @@ export default function VoipDashboardPage() {
   const [calls, setCalls] = useState<Call[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showPassword, setShowPassword] = useState<Record<string, boolean>>({});
-
   useEffect(() => {
     async function load() {
       try {
@@ -93,20 +114,20 @@ export default function VoipDashboardPage() {
     load();
   }, []);
 
-  async function copyText(text: string) {
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      // ignore
-    }
-  }
-
   if (loading) return <div className="p-6">Loading...</div>;
   if (error) return <div className="p-6 text-red-600">{error}</div>;
+
+  const status = service ? statusMessage(service.status) : null;
 
   return (
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-semibold">VoIP Dashboard</h1>
+
+      {status && (
+        <div className={`rounded-lg border p-4 ${status.color} border-current`}>
+          {status.text}
+        </div>
+      )}
 
       {service && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -122,7 +143,7 @@ export default function VoipDashboardPage() {
           </div>
           <div className="rounded-lg border p-4">
             <div className="text-sm text-gray-500">Rate</div>
-            <div className="text-2xl font-bold">{formatCurrency(service?.customerRate || '0')}/min</div>
+            <div className="text-2xl font-bold">{formatCurrency(service?.customerRate || '0', 4)}/min</div>
           </div>
         </div>
       )}
@@ -140,26 +161,6 @@ export default function VoipDashboardPage() {
                   <div><span className="text-gray-500">Domain:</span> {account.domain}</div>
                   <div><span className="text-gray-500">Status:</span> {account.status}</div>
                   <div><span className="text-gray-500">Caller ID:</span> {account.callerId || '—'}</div>
-                </div>
-                <div className="mt-2 flex items-center gap-2 text-sm">
-                  <span className="text-gray-500">Password:</span>
-                  <code className="rounded bg-gray-100 px-2 py-1">
-                    {showPassword[account.id] ? account.password : '••••••••'}
-                  </code>
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((prev) => ({ ...prev, [account.id]: !prev[account.id] }))}
-                    className="text-blue-600 hover:underline"
-                  >
-                    {showPassword[account.id] ? 'Hide' : 'Show'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => copyText(account.password)}
-                    className="text-blue-600 hover:underline"
-                  >
-                    Copy
-                  </button>
                 </div>
               </div>
             ))}

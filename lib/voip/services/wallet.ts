@@ -41,38 +41,89 @@ export async function getTransactions(organizationId: string, take = 100, skip =
   });
 }
 
-interface AddTransactionInput {
+interface TransactionInputBase {
   walletId: string;
   organizationId: string;
   type: keyof typeof TransactionType;
-  amount: Prisma.Decimal; // signed: positive for credit, negative for debit
+  amount: Prisma.Decimal;
   description?: string;
   reference?: string;
+  idempotencyKey?: string;
   createdById?: string;
   metadata?: Record<string, unknown>;
+  balanceAfter?: Prisma.Decimal;
 }
 
-async function addTransaction(input: AddTransactionInput) {
-  const amount = toDecimal(input.amount);
+async function getWalletById(walletId: string, tx?: Prisma.TransactionClient) {
+  const client = tx || prisma;
+  return client.wallet.findUnique({
+    where: { id: walletId },
+    select: { id: true, balance: true, reserved: true },
+  });
+}
+
+async function createTransactionRow(
+  input: TransactionInputBase,
+  tx: Prisma.TransactionClient
+) {
+  return tx.walletTransaction.create({
+    data: {
+      walletId: input.walletId,
+      type: input.type,
+      amount: input.amount,
+      balanceAfter: input.balanceAfter ?? toDecimal(0),
+      description: input.description,
+      reference: input.reference,
+      idempotencyKey: input.idempotencyKey,
+      metadata: input.metadata as unknown as Prisma.InputJsonValue,
+      createdById: input.createdById,
+    },
+  });
+}
+
+// Record a ledger entry WITHOUT changing the wallet balance.
+// Used for reservations/releases and for final call debits when the balance
+// has already been adjusted atomically.
+export async function recordTransaction(input: TransactionInputBase) {
   return prisma.$transaction(async (tx) => {
+    if (input.idempotencyKey) {
+      const existing = await tx.walletTransaction.findUnique({
+        where: { idempotencyKey: input.idempotencyKey },
+      });
+      if (existing) return { transaction: existing };
+    }
+
+    const transaction = await createTransactionRow(input, tx);
+    return { transaction };
+  });
+}
+
+// Update wallet balance AND record a ledger entry atomically.
+async function addTransaction(input: TransactionInputBase) {
+  return prisma.$transaction(async (tx) => {
+    if (input.idempotencyKey) {
+      const existing = await tx.walletTransaction.findUnique({
+        where: { idempotencyKey: input.idempotencyKey },
+      });
+      if (existing) {
+        const wallet = await tx.wallet.findUnique({
+          where: { id: input.walletId },
+          select: { id: true, balance: true, reserved: true },
+        });
+        return { updated: wallet!, transaction: existing };
+      }
+    }
+
     const updated = await tx.wallet.update({
       where: { id: input.walletId },
-      data: { balance: { increment: amount } },
+      data: { balance: { increment: input.amount } },
       select: { id: true, balance: true, reserved: true },
     });
 
-    const transaction = await tx.walletTransaction.create({
-      data: {
-        walletId: input.walletId,
-        type: input.type,
-        amount,
-        balanceAfter: toDecimal(updated.balance),
-        description: input.description,
-        reference: input.reference,
-        metadata: input.metadata as unknown as Prisma.InputJsonValue,
-        createdById: input.createdById,
-      },
-    });
+    const transaction = await createTransactionRow(
+      { ...input, balanceAfter: toDecimal(updated.balance) },
+      tx
+    );
 
     return { updated, transaction };
   });
@@ -83,7 +134,8 @@ export async function addCredit(
   organizationId: string,
   amount: Prisma.Decimal | string | number,
   description: string,
-  createdById?: string
+  createdById?: string,
+  idempotencyKey?: string
 ) {
   const wallet = await getOrCreateWallet(organizationId);
   const credit = toDecimal(amount);
@@ -96,6 +148,7 @@ export async function addCredit(
     amount: credit,
     description,
     createdById,
+    idempotencyKey,
   });
 
   await recomputeServiceStatus(organizationId);
@@ -113,11 +166,17 @@ export async function addDebit(
   organizationId: string,
   amount: Prisma.Decimal | string | number,
   description: string,
-  reference?: string
+  reference?: string,
+  idempotencyKey?: string
 ) {
   const wallet = await getOrCreateWallet(organizationId);
   const debit = toDecimal(amount);
   if (debit.lessThanOrEqualTo(0)) throw new Error('Debit amount must be positive');
+
+  const available = toDecimal(wallet.balance).minus(wallet.reserved);
+  if (debit.greaterThan(available)) {
+    throw new InsufficientBalanceError('Insufficient available balance for debit');
+  }
 
   const { transaction, updated } = await addTransaction({
     walletId: wallet.id,
@@ -126,6 +185,7 @@ export async function addDebit(
     amount: debit.negated(),
     description,
     reference,
+    idempotencyKey,
   });
 
   await recomputeServiceStatus(organizationId);
@@ -139,7 +199,8 @@ export async function issueRefund(
   amount: Prisma.Decimal | string | number,
   description: string,
   createdById?: string,
-  reference?: string
+  reference?: string,
+  idempotencyKey?: string
 ) {
   const wallet = await getOrCreateWallet(organizationId);
   const refund = toDecimal(amount);
@@ -153,6 +214,7 @@ export async function issueRefund(
     description,
     createdById,
     reference,
+    idempotencyKey,
   });
 
   await recomputeServiceStatus(organizationId);
@@ -170,7 +232,8 @@ export async function adjustBalance(
   organizationId: string,
   amount: Prisma.Decimal | string | number,
   description: string,
-  createdById?: string
+  createdById?: string,
+  idempotencyKey?: string
 ) {
   const wallet = await getOrCreateWallet(organizationId);
   const adjustment = toDecimal(amount);
@@ -182,6 +245,7 @@ export async function adjustBalance(
     amount: adjustment,
     description,
     createdById,
+    idempotencyKey,
   });
 
   await recomputeServiceStatus(organizationId);
@@ -217,13 +281,31 @@ export async function reserveForCall(
     );
   }
 
-  await prisma.walletReservation.create({
-    data: {
-      walletId,
-      callId,
-      amount: reservationAmount,
-      status: ReservationStatus.ACTIVE,
-    },
+  const wallet = await getWalletById(walletId);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.walletReservation.create({
+      data: {
+        walletId,
+        callId,
+        amount: reservationAmount,
+        status: ReservationStatus.ACTIVE,
+      },
+    });
+
+    await createTransactionRow(
+      {
+        walletId,
+        organizationId: wallet?.id ?? '', // walletId is not organizationId; row uses wallet relation
+        type: 'RESERVATION',
+        amount: reservationAmount,
+        description: 'Reserve funds for outbound call',
+        reference: callId,
+        idempotencyKey: `reserve:${callId}`,
+        balanceAfter: toDecimal(wallet?.balance ?? 0),
+      },
+      tx
+    );
   });
 }
 
@@ -250,6 +332,20 @@ export async function releaseReservation(reservationId: string) {
         releasedAt: new Date(),
       },
     });
+
+    await createTransactionRow(
+      {
+        walletId: reservation.walletId,
+        organizationId: reservation.wallet.id,
+        type: 'RELEASE',
+        amount: reservation.amount.negated(),
+        description: 'Release reserved funds for call',
+        reference: reservation.callId ?? undefined,
+        idempotencyKey: `release:${reservationId}`,
+        balanceAfter: toDecimal(updatedWallet.balance),
+      },
+      tx
+    );
 
     return { wallet: updatedWallet, reservation: updatedReservation };
   });
@@ -289,6 +385,20 @@ export async function consumeReservation(
         releasedAt: new Date(),
       },
     });
+
+    await createTransactionRow(
+      {
+        walletId: reservation.walletId,
+        organizationId: reservation.wallet.id,
+        type: 'DEBIT',
+        amount: charge.negated(),
+        description: 'Charge for completed outbound call',
+        reference: reservation.callId ?? undefined,
+        idempotencyKey: `consume:${reservationId}`,
+        balanceAfter: toDecimal(updatedWallet.balance),
+      },
+      tx
+    );
 
     return { wallet: updatedWallet, reservation: updatedReservation };
   });

@@ -8,8 +8,10 @@ export async function GET(request: NextRequest) {
     scope: 'admin',
     action: 'read',
     resource: 'organizations',
-    handler: async () => {
+    handler: async (ctx) => {
+      const where = ctx.user.isSuperAdmin ? {} : { id: ctx.membership?.organizationId };
       const organizations = await prisma.organization.findMany({
+        where,
         orderBy: { createdAt: 'desc' },
         include: {
           voipService: true,

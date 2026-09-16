@@ -5,6 +5,7 @@ import { encryptValue, decryptValue, generateSecurePassword } from './crypto';
 import { getProvider } from '@/lib/voip/providers';
 import type { AuthenticatedContext } from '@/lib/rbac/authorization';
 import { audit } from './audit';
+import { assertVoipEligibility } from './eligibility';
 
 export interface CreateSipAccountInput {
   username?: string;
@@ -25,6 +26,7 @@ export async function createSipAccount(
   organizationId: string,
   input: CreateSipAccountInput
 ) {
+  await assertVoipEligibility(organizationId);
   const username = input.username?.trim() || generateUsername();
   const password = generateSecurePassword(24);
   const encrypted = encryptValue(password);

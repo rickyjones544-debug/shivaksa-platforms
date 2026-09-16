@@ -32,6 +32,7 @@ function buildWhere(organizationId: string, searchParams: URLSearchParams) {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   return withVoipAdminAuth(request, {
+    targetOrganizationId: id,
     scope: 'voip',
     action: 'read',
     resource: 'calls',

@@ -3,7 +3,7 @@ const path = require('path');
 
 const appRoot = path.resolve(__dirname, '..');
 const prismaBin = path.join(appRoot, 'node_modules', 'prisma', 'build', 'index.js');
-const schemaPath = '/home/shivjhtl/repositories/shivaksa-platforms/prisma/schema.prisma';
+const schemaPath = path.join(appRoot, 'prisma', 'schema.prisma');
 const baselineName = '20260909000000_initial_baseline';
 
 function run(label, command) {

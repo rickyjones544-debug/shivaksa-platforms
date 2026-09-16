@@ -10,6 +10,7 @@ interface RouteParams {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   return withVoipAdminAuth(request, {
+    targetOrganizationId: id,
     scope: 'wallet',
     action: 'read',
     handler: async () => {

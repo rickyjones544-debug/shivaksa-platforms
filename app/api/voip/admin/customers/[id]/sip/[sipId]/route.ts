@@ -10,6 +10,7 @@ interface RouteParams {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   const { id, sipId } = await params;
   return withVoipAdminAuth(request, {
+    targetOrganizationId: id,
     scope: 'voip',
     action: 'read',
     resource: 'sip',
@@ -24,6 +25,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const { id, sipId } = await params;
   return withVoipAdminAuth(request, {
+    targetOrganizationId: id,
     scope: 'voip',
     action: 'write',
     resource: 'sip',
@@ -43,6 +45,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 export async function POST(request: NextRequest, { params }: RouteParams) {
   const { id, sipId } = await params;
   return withVoipAdminAuth(request, {
+    targetOrganizationId: id,
     scope: 'voip',
     action: 'write',
     resource: 'sip',

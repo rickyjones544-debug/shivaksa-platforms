@@ -4,6 +4,7 @@ import { initiateOutboundCall, listCalls } from '@/lib/voip/services/calls';
 import { toCustomerCallDto } from '@/lib/voip/dto/customer';
 import { InsufficientBalanceError } from '@/lib/voip/services/wallet';
 import { CallAuthorizationError } from '@/lib/voip/services/call-authorization';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function GET(request: NextRequest) {
   return withVoipAuth(request, {
@@ -22,6 +23,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    if (!checkRateLimit(request, 'call-outbound', 20, 60 * 1000)) {
+      return NextResponse.json(
+        { success: false, error: 'Too many call attempts. Please try again later.' },
+        { status: 429 }
+      );
+    }
     return await withVoipAuth(request, {
       scope: 'voip',
       action: 'write',

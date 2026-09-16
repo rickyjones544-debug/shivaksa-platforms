@@ -46,6 +46,8 @@ export const TransactionType = {
   DEBIT: 'DEBIT',
   REFUND: 'REFUND',
   ADJUSTMENT: 'ADJUSTMENT',
+  RESERVATION: 'RESERVATION',
+  RELEASE: 'RELEASE',
 } as const;
 
 export type TransactionType = (typeof TransactionType)[keyof typeof TransactionType];
@@ -63,6 +65,12 @@ export const NotificationType = {
   ZERO_BALANCE: 'ZERO_BALANCE',
   WELCOME: 'WELCOME',
   SUSPENDED: 'SUSPENDED',
+  KYC_SUBMITTED: 'KYC_SUBMITTED',
+  KYC_UNDER_REVIEW: 'KYC_UNDER_REVIEW',
+  KYC_MORE_INFORMATION_REQUIRED: 'KYC_MORE_INFORMATION_REQUIRED',
+  KYC_APPROVED: 'KYC_APPROVED',
+  KYC_REJECTED: 'KYC_REJECTED',
+  KYC_SUSPENDED: 'KYC_SUSPENDED',
 } as const;
 
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];

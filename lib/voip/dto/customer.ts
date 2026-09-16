@@ -1,5 +1,4 @@
 import { Prisma } from '@prisma/client';
-import { getSipPassword } from '@/lib/voip/services/sip';
 
 export type CustomerServiceStatus = 'ACTIVE' | 'LOW_BALANCE' | 'ZERO_BALANCE' | 'SUSPENDED';
 
@@ -10,9 +9,6 @@ export function toCustomerSipAccountDto(account: {
   status: string;
   callerId: string | null;
   phoneNumbers?: { number: string }[];
-  passwordCipher: string;
-  passwordTag: string;
-  passwordIv: string;
 }) {
   return {
     id: account.id,
@@ -21,11 +17,6 @@ export function toCustomerSipAccountDto(account: {
     status: account.status,
     callerId: account.callerId,
     numbers: account.phoneNumbers?.map((n) => n.number) || [],
-    password: getSipPassword({
-      passwordCipher: account.passwordCipher,
-      passwordTag: account.passwordTag,
-      passwordIv: account.passwordIv,
-    }),
   };
 }
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser, type AuthenticatedContext } from '@/lib/auth/auth';
-import { hasPermission } from '@/lib/rbac/authorization';
+import { hasPermission, belongsToOrganization } from '@/lib/rbac/authorization';
 
 export async function withVoipAuth<T>(
   request: NextRequest,
@@ -41,6 +41,7 @@ export async function withVoipAdminAuth<T>(
     scope: string;
     action: string;
     resource?: string;
+    targetOrganizationId?: string;
     handler: (ctx: AuthenticatedContext) => Promise<T>;
   }
 ): Promise<NextResponse> {
@@ -51,6 +52,10 @@ export async function withVoipAdminAuth<T>(
     }
 
     if (!hasPermission(ctx, options.scope, options.action, options.resource)) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
+    if (options.targetOrganizationId && !belongsToOrganization(ctx, options.targetOrganizationId)) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 

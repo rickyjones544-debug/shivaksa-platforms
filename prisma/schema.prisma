@@ -9,6 +9,16 @@ datasource db {
   provider = "postgresql"
 }
 
+enum KycRecordStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  MORE_INFORMATION_REQUIRED
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
 // Phase 3: Multi-tenant foundation
 // - User is global; authentication happens at the User level.
 // - Organization is the tenant isolation boundary.
@@ -42,6 +52,7 @@ model User {
   walletTransactions WalletTransaction[] @relation("WalletTransactionCreator")
   auditLogs         AuditLog[] @relation("AuditLogActor")
   notifications     Notification[]
+  reviewedKycRecords KycRecord[] @relation("KycRecordReviewer")
 
   @@index([email])
   @@index([status])
@@ -75,6 +86,7 @@ model Organization {
   voipCalls    VoipCall[]
   notifications Notification[]
   auditLogs    AuditLog[]
+  kycRecord    KycRecord?
 
   @@index([slug])
   @@index([status])
@@ -381,11 +393,12 @@ model Wallet {
 model WalletTransaction {
   id             String   @id @default(dbgenerated("gen_random_uuid()"))
   walletId       String   @map("wallet_id")
-  type           String   // CREDIT, DEBIT, REFUND, ADJUSTMENT
-  amount         Decimal  @db.Decimal(12, 4) // signed: positive for credit, negative for debit
+  type           String   // CREDIT, DEBIT, REFUND, ADJUSTMENT, RESERVATION, RELEASE
+  amount         Decimal  @db.Decimal(12, 4) // signed: positive for credit/reservation, negative for debit/release
   balanceAfter   Decimal  @map("balance_after") @db.Decimal(12, 4)
   description    String?
   reference      String?  // internal call id, invoice id, etc.
+  idempotencyKey String?  @unique @map("idempotency_key")
   metadata       Json?
   createdById    String?  @map("created_by_id")
   createdAt      DateTime @default(now()) @map("created_at")
@@ -576,4 +589,62 @@ model AuditLog {
   @@index([action])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// ============================================================================
+// KYC / KYB — Customer onboarding and compliance
+// ============================================================================
+
+model KycRecord {
+  id                        String   @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId            String   @unique @map("organization_id")
+  legalBusinessName         String?  @map("legal_business_name")
+  businessType              String?  @map("business_type")
+  country                   String?
+  stateProvince             String?  @map("state_province")
+  businessRegistrationInfo  String?  @map("business_registration_info")
+  website                   String?
+  businessDescription       String?  @map("business_description")
+  intendedUseCase           String?  @map("intended_use_case")
+  expectedMonthlyVolume     String?  @map("expected_monthly_volume")
+  expectedDestinations      String?  @map("expected_destinations")
+  callerIdInfo              String?  @map("caller_id_info")
+  contactEmail              String?  @map("contact_email")
+  contactPhone              String?  @map("contact_phone")
+  status                    KycRecordStatus @default(DRAFT) @map("status")
+  reviewedById              String?  @map("reviewed_by_id")
+  reviewedAt                DateTime? @map("reviewed_at")
+  rejectionReason           String?  @map("rejection_reason")
+  moreInfoReason            String?  @map("more_info_reason")
+  createdAt                 DateTime @default(now()) @map("created_at")
+  updatedAt                 DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  reviewedBy   User?       @relation("KycRecordReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  documents    KycDocument[]
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([reviewedById])
+  @@map("kyc_records")
+}
+
+model KycDocument {
+  id           String   @id @default(dbgenerated("gen_random_uuid()"))
+  kycRecordId  String   @map("kyc_record_id")
+  type         String
+  name         String
+  description  String?
+  contentType  String?  @map("content_type")
+  storageKey   String?  @map("storage_key")
+  source       String   @default("METADATA_ONLY") // METADATA_ONLY, STORED
+  status       String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  kycRecord KycRecord @relation(fields: [kycRecordId], references: [id], onDelete: Cascade)
+
+  @@index([kycRecordId])
+  @@index([type])
+  @@map("kyc_documents")
 }
