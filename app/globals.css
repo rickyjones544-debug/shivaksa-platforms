@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #020617;
+  --foreground: #f8fafc;
 }
 
 @theme inline {
@@ -14,8 +14,8 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #020617;
+    --foreground: #f8fafc;
   }
 }
 
@@ -30,31 +30,37 @@ body {
 }
 
 ::selection {
-  background-color: rgb(37 99 235 / 0.25);
+  background-color: rgb(59 130 246 / 0.35);
 }
 
 .gradient-text {
-  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #7c3aed 100%);
+  background: linear-gradient(135deg, #60a5fa 0%, #818cf8 50%, #c084fc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text-hero {
+  background: linear-gradient(135deg, #93c5fd 0%, #a5b4fc 40%, #d8b4fe 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 .bg-grid {
-  background-image: radial-gradient(rgba(0, 0, 0, 0.06) 1px, transparent 1px);
-  background-size: 24px 24px;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 28px 28px;
 }
 
-@media (prefers-color-scheme: dark) {
-  .bg-grid {
-    background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  }
+.bg-grid-fine {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 20px 20px;
 }
 
 @keyframes fadeInUp {
   from {
     opacity: 0;
-    transform: translateY(12px);
+    transform: translateY(16px);
   }
   to {
     opacity: 1;
@@ -64,29 +70,70 @@ body {
 
 @keyframes pulse-glow {
   0%, 100% {
-    box-shadow: 0 0 0 0 rgb(37 99 235 / 0.15);
+    box-shadow: 0 0 0 0 rgb(59 130 246 / 0.25);
   }
   50% {
-    box-shadow: 0 0 0 12px rgb(37 99 235 / 0);
+    box-shadow: 0 0 0 12px rgb(59 130 246 / 0);
   }
+}
+
+@keyframes dash {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
 }
 
 .animate-fade-in {
-  animation: fadeInUp 0.7s ease-out forwards;
+  animation: fadeInUp 0.8s ease-out forwards;
   opacity: 0;
 }
 
+.animate-pulse-glow {
+  animation: pulse-glow 3s infinite;
+}
+
+.animate-dash {
+  stroke-dasharray: 1200;
+  stroke-dashoffset: 1200;
+  animation: dash 4s ease-out forwards;
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
 .hover-lift {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
 .hover-lift:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 12px 24px -8px rgb(0 0 0 / 0.12);
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px -12px rgb(0 0 0 / 0.4);
+}
+
+.card-glass {
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glow-blue {
+  box-shadow: 0 0 40px -10px rgb(59 130 246 / 0.3);
+}
+
+.glow-purple {
+  box-shadow: 0 0 40px -10px rgb(168 85 247 / 0.3);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-fade-in {
+  .animate-fade-in,
+  .animate-dash,
+  .animate-float {
     animation: none;
     opacity: 1;
   }
