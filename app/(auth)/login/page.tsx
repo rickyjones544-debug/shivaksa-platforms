@@ -5,8 +5,13 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950">
-          <div className="text-zinc-600 dark:text-zinc-400">Loading...</div>
+        <div className="w-full max-w-md bg-white dark:bg-zinc-900 rounded-2xl shadow-lg p-8 border border-zinc-200 dark:border-zinc-800">
+          <div className="h-8 w-48 rounded bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
+          <div className="mt-6 space-y-4">
+            <div className="h-10 rounded bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
+            <div className="h-10 rounded bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
+            <div className="h-10 rounded bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
+          </div>
         </div>
       }
     >
