@@ -130,9 +130,12 @@ function HeroVisual() {
       <div className="absolute -inset-8 bg-blue-500/10 blur-3xl rounded-full" />
       <div className="absolute -inset-8 bg-violet-500/10 blur-3xl rounded-full translate-x-12 translate-y-8" />
       <div className="relative rounded-2xl card-glass p-6 sm:p-8 glow-blue">
-        <div className="flex items-center gap-2 text-xs font-medium text-slate-400 border-b border-white/10 pb-4 mb-5">
-          <span className="inline-flex h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-          Platform live on app.shivaksatechnology.com
+        <div className="flex items-center justify-between text-xs font-medium text-slate-400 border-b border-white/10 pb-4 mb-5">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+            Example platform preview
+          </div>
+          <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-slate-500">DEMO</span>
         </div>
 
         <svg viewBox="0 0 360 160" className="w-full h-auto mb-5" fill="none" stroke="currentColor">
@@ -152,9 +155,9 @@ function HeroVisual() {
 
         <div className="grid grid-cols-3 gap-3 mb-5">
           {[
-            { label: 'Prepaid wallet', value: '$1,240.00' },
+            { label: 'Prepaid wallet', value: '$0.00' },
             { label: 'Customer rate', value: '$0.0160/min' },
-            { label: 'Active calls', value: '12' },
+            { label: 'Active calls', value: '0' },
           ].map((stat) => (
             <div key={stat.label} className="rounded-xl border border-white/5 bg-white/5 p-4">
               <div className="text-xs text-slate-400">{stat.label}</div>

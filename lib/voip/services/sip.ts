@@ -6,6 +6,7 @@ import { getProvider } from '@/lib/voip/providers';
 import type { AuthenticatedContext } from '@/lib/rbac/authorization';
 import { audit } from './audit';
 import { assertVoipEligibility } from './eligibility';
+import { toCustomerSipAccountDto } from '@/lib/voip/dto/customer';
 
 export interface CreateSipAccountInput {
   username?: string;
@@ -80,7 +81,7 @@ export async function createSipAccount(
     username: account.username,
   });
 
-  return { ...account, password };
+  return toCustomerSipAccountDto(account);
 }
 
 export async function getSipAccounts(organizationId: string) {
@@ -148,7 +149,7 @@ export async function resetSipPassword(
 
   await audit(ctx, 'SIP_CREDENTIAL_RESET', 'SipAccount', updated.id, { organizationId });
 
-  return { ...updated, password };
+  return toCustomerSipAccountDto(updated);
 }
 
 export function getSipPassword(account: {

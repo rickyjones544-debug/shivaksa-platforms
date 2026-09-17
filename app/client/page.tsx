@@ -1,6 +1,9 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getCurrentUser } from '@/lib/auth/auth';
+import { getKycRecord } from '@/lib/compliance/service';
+import { getOrCreateWallet } from '@/lib/voip/services/wallet';
+import { getOrCreateVoipService } from '@/lib/voip/services/customers';
 
 const actions = [
   {
@@ -53,7 +56,7 @@ function Icon({ name }: { name: string }) {
   if (name === 'document') {
     return (
       <svg {...props}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125-1.125V11.25a9 9 0 00-9-9z" />
       </svg>
     );
   }
@@ -64,11 +67,66 @@ function Icon({ name }: { name: string }) {
   );
 }
 
+function statusBadgeClass(status?: string) {
+  switch (status) {
+    case 'APPROVED':
+      return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
+    case 'REJECTED':
+    case 'SUSPENDED':
+      return 'bg-red-500/10 text-red-500 border-red-500/20';
+    case 'MORE_INFORMATION_REQUIRED':
+      return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
+    case 'UNDER_REVIEW':
+    case 'SUBMITTED':
+      return 'bg-blue-500/10 text-blue-500 border-blue-500/20';
+    default:
+      return 'bg-zinc-500/10 text-zinc-500 border-zinc-500/20';
+  }
+}
+
+function formatCurrency(value: string | number | null | undefined) {
+  const n = value == null ? 0 : Number(value);
+  return `$${n.toFixed(2)}`;
+}
+
 export default async function ClientDashboard() {
   const ctx = await getCurrentUser();
 
   if (!ctx) {
     redirect('/login?redirect=/client');
+  }
+
+  const organizationId = ctx.organization?.id;
+  if (!organizationId) {
+    redirect('/login?redirect=/client');
+  }
+
+  const [kycRecord, wallet, service] = await Promise.all([
+    getKycRecord(organizationId),
+    getOrCreateWallet(organizationId),
+    getOrCreateVoipService(organizationId),
+  ]);
+
+  const available = wallet.balance.minus(wallet.reserved);
+  const rate = service.customerRate.toNumber();
+  const estimatedMinutes = rate > 0 ? Math.floor(available.toNumber() / rate) : 0;
+
+  const kycStatus = kycRecord?.status || 'DRAFT';
+  const serviceStatus = service.isAdminSuspended
+    ? 'SUSPENDED'
+    : service.status;
+
+  const alerts: string[] = [];
+  if (kycStatus !== 'APPROVED') {
+    alerts.push('Business onboarding is not yet approved. VoIP services may be restricted until review is complete.');
+  }
+  if (available.lessThanOrEqualTo(0)) {
+    alerts.push('Wallet balance is zero or negative. Add funds to continue calling.');
+  } else if (serviceStatus === 'LOW_BALANCE') {
+    alerts.push('Wallet balance is low. Available minutes are limited.');
+  }
+  if (serviceStatus === 'SUSPENDED') {
+    alerts.push('Your VoIP service is suspended. Contact support.');
   }
 
   return (
@@ -90,6 +148,44 @@ export default async function ClientDashboard() {
             Go to VoIP
           </Link>
         </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
+            <div className="text-sm text-zinc-500 dark:text-zinc-400 mb-1">Wallet balance</div>
+            <div className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{formatCurrency(wallet.balance.toString())}</div>
+            <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Reserved: {formatCurrency(wallet.reserved.toString())}</div>
+          </div>
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
+            <div className="text-sm text-zinc-500 dark:text-zinc-400 mb-1">Estimated available minutes</div>
+            <div className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{estimatedMinutes.toLocaleString()}</div>
+            <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Rate: {formatCurrency(service.customerRate.toString())}/min</div>
+          </div>
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
+            <div className="text-sm text-zinc-500 dark:text-zinc-400 mb-1">Onboarding (KYC/KYB)</div>
+            <div className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusBadgeClass(kycStatus)}`}>
+              {kycStatus}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
+            <div className="text-sm text-zinc-500 dark:text-zinc-400 mb-1">VoIP service status</div>
+            <div className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusBadgeClass(serviceStatus)}`}>
+              {serviceStatus}
+            </div>
+          </div>
+        </div>
+
+        {alerts.length > 0 && (
+          <div className="space-y-2">
+            {alerts.map((alert, i) => (
+              <div
+                key={i}
+                className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300"
+              >
+                {alert}
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {actions.map((action) => (
@@ -118,7 +214,7 @@ export default async function ClientDashboard() {
               href="/onboarding"
               className="inline-flex items-center justify-center px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition"
             >
-              Start onboarding
+              {kycStatus === 'DRAFT' ? 'Start onboarding' : 'Review onboarding'}
             </Link>
             <Link
               href="/voip/wallet"
