@@ -31,10 +31,7 @@ export default function ResetPasswordForm() {
         body: JSON.stringify({ email }),
       });
 
-      // Always show generic success for security
-      setMessage(
-        'If an account with that email exists, a reset link has been sent.'
-      );
+      setMessage('If an account with that email exists, a reset link has been sent.');
     } catch (err) {
       setError('An error occurred. Please try again.');
     } finally {
@@ -74,114 +71,112 @@ export default function ResetPasswordForm() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 px-4">
-      <div className="w-full max-w-md bg-white dark:bg-zinc-900 rounded-2xl shadow-lg p-8">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-zinc-900 dark:text-white">
-            Shivaksa Technologies LLC
-          </h1>
-          <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-            {isConfirmMode ? 'Set a new password' : 'Reset your password'}
-          </p>
+    <div className="w-full max-w-md bg-white dark:bg-zinc-900 rounded-2xl shadow-lg p-8 border border-zinc-200 dark:border-zinc-800">
+      <div className="text-center mb-8">
+        <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-white">
+          {isConfirmMode ? 'Set a new password' : 'Reset your password'}
+        </h1>
+        <p className="mt-2 text-zinc-600 dark:text-zinc-400">
+          {isConfirmMode ? 'Enter your new password below' : 'We will email you a reset link'}
+        </p>
+      </div>
+
+      {message && (
+        <div className="mb-5 p-3 rounded-xl bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 text-sm border border-green-200 dark:border-green-900">
+          {message}
         </div>
+      )}
 
-        {message && (
-          <div className="mb-4 p-3 bg-green-50 text-green-700 rounded-lg text-sm">
-            {message}
-          </div>
-        )}
+      {error && (
+        <div className="mb-5 p-3 rounded-xl bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 text-sm border border-red-200 dark:border-red-900">
+          {error}
+        </div>
+      )}
 
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm">
-            {error}
-          </div>
-        )}
-
-        {isConfirmMode ? (
-          <form onSubmit={handleConfirmReset} className="space-y-5">
-            <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
-              >
-                New Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={8}
-                className="w-full px-4 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-zinc-800 dark:text-white"
-                placeholder="••••••••"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="confirmPassword"
-                className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
-              >
-                Confirm New Password
-              </label>
-              <input
-                id="confirmPassword"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                className="w-full px-4 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-zinc-800 dark:text-white"
-                placeholder="••••••••"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-lg transition-colors"
+      {isConfirmMode ? (
+        <form onSubmit={handleConfirmReset} className="space-y-5">
+          <div>
+            <label
+              htmlFor="password"
+              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5"
             >
-              {loading ? 'Resetting...' : 'Reset Password'}
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={handleRequestReset} className="space-y-5">
-            <div>
-              <label
-                htmlFor="email"
-                className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
-              >
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full px-4 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-zinc-800 dark:text-white"
-                placeholder="you@company.com"
-              />
-            </div>
+              New Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={8}
+              className="w-full px-4 py-2.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+              placeholder="••••••••"
+            />
+          </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-lg transition-colors"
+          <div>
+            <label
+              htmlFor="confirmPassword"
+              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5"
             >
-              {loading ? 'Sending...' : 'Send Reset Link'}
-            </button>
-          </form>
-        )}
+              Confirm New Password
+            </label>
+            <input
+              id="confirmPassword"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              className="w-full px-4 py-2.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+              placeholder="••••••••"
+            />
+          </div>
 
-        <div className="mt-6 text-center text-sm">
-          <Link
-            href="/login"
-            className="text-blue-600 hover:text-blue-800 dark:text-blue-400"
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-lg transition-colors"
           >
-            Back to login
-          </Link>
-        </div>
+            {loading ? 'Resetting...' : 'Reset Password'}
+          </button>
+        </form>
+      ) : (
+        <form onSubmit={handleRequestReset} className="space-y-5">
+          <div>
+            <label
+              htmlFor="email"
+              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5"
+            >
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="w-full px-4 py-2.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+              placeholder="you@company.com"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-lg transition-colors"
+          >
+            {loading ? 'Sending...' : 'Send Reset Link'}
+          </button>
+        </form>
+      )}
+
+      <div className="mt-6 text-center text-sm">
+        <Link
+          href="/login"
+          className="text-blue-600 hover:text-blue-800 dark:text-blue-400"
+        >
+          Back to login
+        </Link>
       </div>
     </div>
   );
