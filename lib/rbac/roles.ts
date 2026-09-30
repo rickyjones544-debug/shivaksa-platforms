@@ -7,8 +7,10 @@ export type SystemRole =
   | 'INTERNAL_STAFF'
   | 'CLIENT_ADMIN'
   | 'CLIENT_VIEWER'
+  | 'CLIENT_VOIP_SUPPORT'
   | 'SUPERVISOR'
-  | 'BPO_AGENT';
+  | 'BPO_AGENT'
+  | 'CARRIER_MANAGER';
 
 export interface RoleDefinition {
   name: SystemRole;
@@ -38,7 +40,10 @@ export const systemRoles: RoleDefinition[] = [
     name: 'OPERATIONS_MANAGER',
     description: 'Manages platform operations across organizations',
     isSystem: true,
-    permissions: allInScopes(['admin', 'organization', 'membership', 'invitation', 'bpo', 'qa', 'reports', 'ai', 'voip', 'wallet', 'audit']),
+    permissions: allInScopes(
+      ['admin', 'organization', 'membership', 'invitation', 'bpo', 'qa', 'reports', 'ai', 'voip', 'wallet', 'carrier', 'carrier-rate', 'carrier-route', 'provider', 'rate-desk', 'connectivity', 'traffic', 'provider-billing', 'documents', 'wholesale-profile', 'requirements', 'audit'],
+      ['read', 'write', 'delete', 'manage', 'publish', 'archive']
+    ),
   },
   {
     name: 'QA_MANAGER',
@@ -50,7 +55,7 @@ export const systemRoles: RoleDefinition[] = [
     name: 'INTERNAL_STAFF',
     description: 'Internal platform staff with limited operational access',
     isSystem: true,
-    permissions: allInScopes(['reports', 'bpo', 'crm'], ['read']),
+    permissions: allInScopes(['reports', 'bpo', 'crm', 'provider', 'rate-desk', 'traffic', 'requirements', 'wholesale-profile'], ['read']),
   },
   {
     name: 'CLIENT_ADMIN',
@@ -81,6 +86,18 @@ export const systemRoles: RoleDefinition[] = [
     ),
   },
   {
+    name: 'CLIENT_VOIP_SUPPORT',
+    description: 'Tenant-scoped browser calling and VoIP support access',
+    isSystem: true,
+    permissions: [
+      permissionKey('voip', 'read', 'calls'),
+      permissionKey('voip', 'write', 'calls'),
+      permissionKey('voip', 'read', 'sip'),
+      permissionKey('voip', 'read', 'numbers'),
+      permissionKey('wallet', 'read'),
+    ],
+  },
+  {
     name: 'SUPERVISOR',
     description: 'Supervises BPO agents and QA within an organization',
     isSystem: true,
@@ -96,6 +113,20 @@ export const systemRoles: RoleDefinition[] = [
       permissionKey('qa', 'read', 'forms'),
       permissionKey('qa', 'write', 'reviews'),
       permissionKey('reports', 'read'),
+    ],
+  },
+  {
+    name: 'CARRIER_MANAGER',
+    description: 'Manages wholesale provider relationships, rates, connectivity and commercial terms',
+    isSystem: true,
+    permissions: [
+      ...allInScopes(
+        ['provider', 'rate-desk', 'connectivity', 'traffic', 'provider-billing', 'documents', 'wholesale-profile', 'carrier', 'carrier-rate', 'carrier-route', 'audit'],
+        ['read', 'write', 'manage']
+      ),
+      // Carrier managers read and update requirements but cannot publish, archive or delete them
+      permissionKey('requirements', 'read'),
+      permissionKey('requirements', 'write'),
     ],
   },
 ];

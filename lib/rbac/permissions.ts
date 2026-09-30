@@ -7,6 +7,8 @@ export const PermissionAction = {
   WRITE: 'write',
   DELETE: 'delete',
   MANAGE: 'manage',
+  PUBLISH: 'publish',
+  ARCHIVE: 'archive',
 } as const;
 
 export type PermissionActionType = (typeof PermissionAction)[keyof typeof PermissionAction];
@@ -147,6 +149,76 @@ const walletPermissions: PermissionDefinition[] = [
   { scope: 'wallet', action: 'write', description: 'Credit, debit, refund, and adjust wallet' },
 ];
 
+// Multi-carrier wholesale VoIP administration
+const carrierPermissions: PermissionDefinition[] = [
+  { scope: 'carrier', action: 'manage', description: 'Full carrier management' },
+  { scope: 'carrier', action: 'read', description: 'Read carriers' },
+  { scope: 'carrier', action: 'write', description: 'Create/update carriers' },
+  { scope: 'carrier', action: 'delete', description: 'Delete carriers' },
+  { scope: 'carrier-rate', action: 'manage', description: 'Full carrier rate management' },
+  { scope: 'carrier-rate', action: 'read', description: 'Read carrier rates' },
+  { scope: 'carrier-rate', action: 'write', description: 'Create/update carrier rates' },
+  { scope: 'carrier-rate', action: 'delete', description: 'Delete carrier rates' },
+  { scope: 'carrier-route', action: 'manage', description: 'Full carrier routing management' },
+  { scope: 'carrier-route', action: 'read', description: 'Read carrier routes' },
+  { scope: 'carrier-route', action: 'write', description: 'Create/update carrier routes' },
+  { scope: 'carrier-route', action: 'delete', description: 'Delete carrier routes' },
+];
+
+// Provider CRM — wholesale carrier relationship management (internal only)
+const providerPermissions: PermissionDefinition[] = [
+  { scope: 'provider', action: 'manage', description: 'Full provider CRM management' },
+  { scope: 'provider', action: 'read', description: 'Read provider records' },
+  { scope: 'provider', action: 'write', description: 'Create/update providers, contacts, tasks and notes' },
+  { scope: 'provider', action: 'delete', description: 'Delete provider records' },
+  { scope: 'provider', action: 'read', resource: 'submissions', description: 'Read provider submissions' },
+  { scope: 'provider', action: 'write', resource: 'submissions', description: 'Review and process provider submissions' },
+  { scope: 'provider', action: 'read', resource: 'links', description: 'Read onboarding links' },
+  { scope: 'provider', action: 'write', resource: 'links', description: 'Create, expire and revoke onboarding links' },
+  // Rate Desk — received/negotiated provider rates (internal only)
+  { scope: 'rate-desk', action: 'manage', description: 'Full rate desk management' },
+  { scope: 'rate-desk', action: 'read', description: 'Read provider rate sheets and comparisons' },
+  { scope: 'rate-desk', action: 'write', description: 'Create/update provider rate sheets' },
+  { scope: 'rate-desk', action: 'delete', description: 'Delete provider rate sheets' },
+  // Connectivity — provider interconnection records and tests
+  { scope: 'connectivity', action: 'manage', description: 'Full connectivity management' },
+  { scope: 'connectivity', action: 'read', description: 'Read provider connections' },
+  { scope: 'connectivity', action: 'write', description: 'Create/update provider connections and tests' },
+  { scope: 'connectivity', action: 'delete', description: 'Delete provider connections' },
+  // Traffic & CDR — internal traffic views and reconciliation
+  { scope: 'traffic', action: 'manage', description: 'Full traffic management' },
+  { scope: 'traffic', action: 'read', description: 'Read internal traffic and CDR data' },
+  { scope: 'traffic', action: 'write', description: 'Manage CDR reconciliation' },
+  { scope: 'traffic', action: 'delete', description: 'Delete traffic records' },
+  // Provider billing — counterparty accounts, invoices, disputes
+  { scope: 'provider-billing', action: 'manage', description: 'Full provider billing management' },
+  { scope: 'provider-billing', action: 'read', description: 'Read provider accounts and invoices' },
+  { scope: 'provider-billing', action: 'write', description: 'Manage provider invoices and payments' },
+  { scope: 'provider-billing', action: 'delete', description: 'Delete provider billing records' },
+  // Provider documents
+  { scope: 'documents', action: 'manage', description: 'Full provider document management' },
+  { scope: 'documents', action: 'read', description: 'Read provider documents' },
+  { scope: 'documents', action: 'write', description: 'Upload and publish provider documents' },
+  { scope: 'documents', action: 'delete', description: 'Delete provider documents' },
+  // Wholesale profile — provider-facing published requirements
+  { scope: 'wholesale-profile', action: 'manage', description: 'Full wholesale profile management' },
+  { scope: 'wholesale-profile', action: 'read', description: 'Read wholesale profile' },
+  { scope: 'wholesale-profile', action: 'write', description: 'Edit wholesale profile' },
+  { scope: 'wholesale-profile', action: 'delete', description: 'Delete wholesale profile versions' },
+  { scope: 'wholesale-profile', action: 'publish', description: 'Publish a wholesale profile version' },
+  { scope: 'wholesale-profile', action: 'archive', description: 'Archive a wholesale profile' },
+];
+
+// Requirements Center — Shivaksa's internal wholesale provider requirements
+const requirementsPermissions: PermissionDefinition[] = [
+  { scope: 'requirements', action: 'manage', description: 'Full requirements management' },
+  { scope: 'requirements', action: 'read', description: 'Read requirement sets and versions' },
+  { scope: 'requirements', action: 'write', description: 'Create/update requirement sets and sections' },
+  { scope: 'requirements', action: 'delete', description: 'Delete requirement sets' },
+  { scope: 'requirements', action: 'publish', description: 'Publish requirement versions' },
+  { scope: 'requirements', action: 'archive', description: 'Archive requirement sets and versions' },
+];
+
 // Audit logging
 const auditPermissions: PermissionDefinition[] = [
   { scope: 'audit', action: 'manage', description: 'Full audit log management' },
@@ -165,5 +237,8 @@ export const allPermissions: PermissionDefinition[] = [
   ...aiPermissions,
   ...voipPermissions,
   ...walletPermissions,
+  ...carrierPermissions,
+  ...providerPermissions,
+  ...requirementsPermissions,
   ...auditPermissions,
 ];

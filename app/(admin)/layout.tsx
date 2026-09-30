@@ -9,6 +9,8 @@ const nav = [
   { href: '/admin/organizations', label: 'Organizations' },
   { href: '/admin/onboarding', label: 'Onboarding' },
   { href: '/admin/voip', label: 'VoIP' },
+  { href: '/admin/rate-desk', label: 'Rate Desk' },
+  { href: '/admin/voice-test', label: 'Voice Test' },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

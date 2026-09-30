@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client';
+import type { Carrier, CarrierRate } from '@prisma/client';
 
 export interface OutboundCallInput {
   providerConnectionId: string;
@@ -8,6 +9,12 @@ export interface OutboundCallInput {
   webhookUrl: string;
   maxDurationSeconds: number;
   clientState?: string;
+  organizationId?: string;
+  // Multi-carrier routing context (optional; API providers such as Telnyx ignore these).
+  carrier?: Carrier;
+  carrierRate?: CarrierRate;
+  dialString?: string;
+  gatewayCallId?: string;
 }
 
 export interface ProviderCallResult {
@@ -78,7 +85,7 @@ export interface VoipProvider {
   name: string;
   createOutboundCall(input: OutboundCallInput): Promise<ProviderCallResult>;
   getCall(providerCallId: string): Promise<ProviderCall | null>;
-  hangupCall(providerCallId: string): Promise<void>;
+  hangupCall(providerCallId: string, organizationId?: string): Promise<void>;
   handleWebhook(rawBody: string, signature: string, timestamp: string): Promise<ProviderWebhookResult>;
   createSipConnection?(input: SipConnectionInput): Promise<SipConnectionResult>;
   assignNumberToConnection?(input: NumberAssignmentInput): Promise<void>;

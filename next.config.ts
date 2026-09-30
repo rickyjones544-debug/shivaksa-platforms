@@ -43,6 +43,31 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      {
+        // Bearer-token wholesale provider pages: never cached, never indexed.
+        source: '/wholesale/provider/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, private'
+          },
+          {
+            key: 'X-Robots-Tag',
+            value: 'noindex, nofollow, noarchive'
+          },
+        ],
+      },
+      {
+        // The isolated WebRTC echo test page is the only surface allowed
+        // to request the microphone, and only for this origin.
+        source: '/admin/voice-test/:path*',
+        headers: [
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(self), geolocation=()'
+          },
+        ],
+      },
     ];
   },
 

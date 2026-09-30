@@ -34,9 +34,17 @@ export function checkRateLimit(
   max: number,
   windowMs: number
 ): boolean {
+  return checkIdentifierRateLimit(getRateLimitIdentifier(request), key, max, windowMs);
+}
+
+export function checkIdentifierRateLimit(
+  identifier: string,
+  key: string,
+  max: number,
+  windowMs: number
+): boolean {
   cleanup();
-  const id = getRateLimitIdentifier(request);
-  const fullKey = `${id}:${key}`;
+  const fullKey = `${identifier}:${key}`;
   const now = Date.now();
   const entry = store.get(fullKey);
 

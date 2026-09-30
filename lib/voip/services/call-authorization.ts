@@ -3,11 +3,13 @@ import { prisma } from '@/lib/db/prisma';
 import { CallDirection, CallStatus, SipAccountStatus } from '@/lib/voip/constants';
 import { toDecimal, getMaxCallCost, getReserveAmount } from './billing';
 import { reserveForCall, InsufficientBalanceError } from './wallet';
+import {
+  normalizeDestination,
+  validateDestination as validateNormalizedDestination,
+  type NormalizedDestination,
+} from './normalization';
 
 import type { AuthenticatedContext } from '@/lib/rbac/authorization';
-
-const E164_REGEX = /^\+1[2-9]\d{9}$/;
-const ALLOWED_DESTINATIONS: RegExp[] = [E164_REGEX];
 
 export class CallAuthorizationError extends Error {
   constructor(message: string) {
@@ -17,7 +19,7 @@ export class CallAuthorizationError extends Error {
 }
 
 export function validateDestination(destination: string): boolean {
-  return ALLOWED_DESTINATIONS.some((regex) => regex.test(destination));
+  return validateNormalizedDestination(destination);
 }
 
 export interface OutboundAuthorization {
@@ -25,6 +27,7 @@ export interface OutboundAuthorization {
   sipAccountId: string;
   callerId: string;
   destination: string;
+  normalizedDestination: NormalizedDestination;
   reservationId: string;
   reservedAmount: Prisma.Decimal;
   maxDurationMinutes: number;
@@ -66,7 +69,13 @@ export async function authorizeOutboundCall(
     throw new CallAuthorizationError('Wallet not configured');
   }
 
-  if (!validateDestination(destination)) {
+  let normalized: NormalizedDestination;
+  try {
+    normalized = normalizeDestination(destination);
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new CallAuthorizationError(error.message);
+    }
     throw new CallAuthorizationError('Destination is not allowed');
   }
 
@@ -108,6 +117,9 @@ export async function authorizeOutboundCall(
       direction: CallDirection.OUTBOUND,
       callerId: sipAccount.callerId || sipAccount.username,
       destination,
+      normalizedDestination: normalized.digits,
+      destinationCountry: normalized.countryIso,
+      destinationType: normalized.destinationType,
       status: CallStatus.INITIATED,
       customerRate,
     },
@@ -137,6 +149,7 @@ export async function authorizeOutboundCall(
     sipAccountId: sipAccount.id,
     callerId: call.callerId,
     destination,
+    normalizedDestination: normalized,
     reservationId: reservation.id,
     reservedAmount: maxCallCost,
     maxDurationMinutes: maxDuration,

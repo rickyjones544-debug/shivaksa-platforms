@@ -19,6 +19,179 @@ enum KycRecordStatus {
   SUSPENDED
 }
 
+enum CarrierType {
+  API
+  SIP_GATEWAY
+}
+
+enum CarrierAuthType {
+  IP_AUTH
+  CREDENTIAL_AUTH
+}
+
+enum CarrierStatus {
+  TEST
+  ACTIVE
+  SUSPENDED
+}
+
+enum Transport {
+  UDP
+  TCP
+  TLS
+}
+
+enum CliMode {
+  FIXED
+  POOL
+  PASS_THROUGH
+}
+
+enum DestinationType {
+  FIXED
+  MOBILE
+  ALL
+}
+
+// ============================================================================
+// Provider CRM — wholesale carrier relationship management (internal)
+// ============================================================================
+
+enum ProviderLifecycleStage {
+  PROSPECT
+  CONTACTED
+  IN_REVIEW
+  COMMERCIAL_REVIEW
+  TECHNICAL_REVIEW
+  AGREEMENT_PENDING
+  AGREEMENT_ACTIVE
+  CONNECTIVITY_PENDING
+  CONNECTIVITY_ACTIVE
+  TRAFFIC_ACTIVE
+  SUSPENDED
+  INACTIVE
+  CLOSED
+}
+
+enum ProviderContactRole {
+  SALES
+  NOC
+  TECHNICAL
+  BILLING
+  RATES
+  ACCOUNT_MANAGER
+  OTHER
+}
+
+enum ProviderSubmissionStatus {
+  NEW
+  REVIEWING
+  ACCEPTED
+  REJECTED
+}
+
+enum ProviderTaskType {
+  FOLLOW_UP
+  RATE_REQUEST
+  CONNECTIVITY
+  CLI
+  CDR
+  AGREEMENT
+  BILLING
+  TECHNICAL
+  GENERAL
+}
+
+enum ProviderTaskStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum ProviderDocumentCategory {
+  COMPANY_DOCUMENT
+  LICENSE
+  RATE_CARD
+  AGREEMENT
+  TECHNICAL_DOCUMENT
+  COMPLIANCE_DOCUMENT
+  OTHER
+}
+
+// PENDING = uploaded against an onboarding link but not yet claimed by a
+// submission; ATTACHED = part of a submitted intake snapshot (immutable).
+enum ProviderSubmissionDocumentStatus {
+  PENDING
+  ATTACHED
+}
+
+// ============================================================================
+// Requirements Center — Shivaksa's internal source of truth for what it
+// requires from wholesale traffic providers. Org-owned, never provider-owned.
+// ============================================================================
+
+enum RequirementSetStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum RequirementVersionStatus {
+  DRAFT
+  PUBLISHED
+  SUPERSEDED
+  ARCHIVED
+}
+
+enum RequirementVisibility {
+  INTERNAL
+  PUBLISHABLE
+}
+
+enum WholesaleProfileStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+// ============================================================================
+// Rate Desk — internal provider rate management. Structurally separate from
+// the live Carrier/CarrierRate routing domain: nothing in this domain can
+// activate routing, credentials, or traffic.
+// ============================================================================
+
+enum ProviderRateSheetStatus {
+  RECEIVED
+  ACTIVE
+  SUPERSEDED
+  ARCHIVED
+}
+
+enum ProviderRateSheetVersionStatus {
+  DRAFT
+  PUBLISHED
+  SUPERSEDED
+  ARCHIVED
+}
+
+enum ProviderRateSheetSource {
+  MANUAL
+  EMAIL
+  SUBMISSION
+  SUBMISSION_DOCUMENT
+  API
+}
+
+// Provider-rate row vocabulary. Distinct from carrier-domain DestinationType
+// (FIXED/MOBILE/ALL), where ALL is a routing fallback — a provider rate marked
+// BOTH prices fixed and mobile identically.
+enum ProviderRateRouteType {
+  FIXED
+  MOBILE
+  BOTH
+}
+
 // Phase 3: Multi-tenant foundation
 // - User is global; authentication happens at the User level.
 // - Organization is the tenant isolation boundary.
@@ -36,23 +209,42 @@ model User {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   // Relations
-  sessions       Session[]
-  passwordResets PasswordReset[]
-  memberships    OrganizationMembership[]
+  sessions        Session[]
+  passwordResets  PasswordReset[]
+  memberships     OrganizationMembership[]
   invitationsSent Invitation[]
 
   // CRM relations
-  createdContacts Contact[]
-  createdLeads    Lead[] @relation("CreatedLeads")
-  assignedLeads   Lead[] @relation("AssignedLeads")
+  createdContacts  Contact[]
+  createdLeads     Lead[]     @relation("CreatedLeads")
+  assignedLeads    Lead[]     @relation("AssignedLeads")
   createdCampaigns Campaign[]
-  createdNotes    Note[]
+  createdNotes     Note[]
 
   // VoIP relations
   walletTransactions WalletTransaction[] @relation("WalletTransactionCreator")
-  auditLogs         AuditLog[] @relation("AuditLogActor")
-  notifications     Notification[]
-  reviewedKycRecords KycRecord[] @relation("KycRecordReviewer")
+  auditLogs          AuditLog[]          @relation("AuditLogActor")
+  notifications      Notification[]
+  reviewedKycRecords KycRecord[]         @relation("KycRecordReviewer")
+
+  // Provider CRM relations
+  onboardingLinksCreated      OnboardingLink[]     @relation("OnboardingLinkCreator")
+  providerSubmissionsReviewed ProviderSubmission[] @relation("ProviderSubmissionReviewer")
+  providerNotes               ProviderNote[]       @relation("ProviderNoteAuthor")
+  providerTasksAssigned       ProviderTask[]       @relation("ProviderTaskAssignee")
+  providerTasksCreated        ProviderTask[]       @relation("ProviderTaskCreator")
+
+  // Requirements Center relations
+  requirementSetsCreated      RequirementSet[]     @relation("RequirementSetCreator")
+  requirementSetsUpdated      RequirementSet[]     @relation("RequirementSetUpdater")
+  requirementVersionsCreated  RequirementVersion[] @relation("RequirementVersionCreator")
+  requirementVersionsPublished RequirementVersion[] @relation("RequirementVersionPublisher")
+  wholesaleProfilesCreated    WholesaleProfile[]   @relation("WholesaleProfileCreator")
+  wholesaleProfilesUpdated    WholesaleProfile[]   @relation("WholesaleProfileUpdater")
+
+  // Rate Desk relations
+  providerRateSheetsCreated           ProviderRateSheet[]        @relation("ProviderRateSheetCreator")
+  providerRateSheetVersionsPublished  ProviderRateSheetVersion[] @relation("ProviderRateSheetVersionPublisher")
 
   @@index([email])
   @@index([status])
@@ -62,12 +254,12 @@ model User {
 
 // Tenant isolation boundary. Every business record belongs to exactly one Organization.
 model Organization {
-  id          String   @id @default(dbgenerated("gen_random_uuid()"))
-  name        String
-  slug        String   @unique
-  status      String   @default("ACTIVE") // ACTIVE, SUSPENDED
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id        String   @id @default(dbgenerated("gen_random_uuid()"))
+  name      String
+  slug      String   @unique
+  status    String   @default("ACTIVE") // ACTIVE, SUSPENDED
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   memberships OrganizationMembership[]
   invitations Invitation[]
@@ -79,14 +271,33 @@ model Organization {
   notes     Note[]
 
   // VoIP relations
-  voipService  VoipService?
-  wallet       Wallet?
-  sipAccounts  SipAccount[]
-  phoneNumbers PhoneNumber[]
-  voipCalls    VoipCall[]
+  voipService   VoipService?
+  wallet        Wallet?
+  sipAccounts   SipAccount[]
+  phoneNumbers  PhoneNumber[]
+  voipCalls     VoipCall[]
   notifications Notification[]
-  auditLogs    AuditLog[]
-  kycRecord    KycRecord?
+  auditLogs     AuditLog[]
+  kycRecord     KycRecord?
+
+  // Multi-carrier wholesale VoIP
+  carriers             Carrier[]
+  carrierRoutePolicies CarrierRoutePolicy[]
+
+  // Provider CRM relations
+  providers            Provider[]
+  onboardingLinks      OnboardingLink[]
+  providerSubmissions  ProviderSubmission[]
+  providerSubmissionDocuments ProviderSubmissionDocument[]
+
+  // Requirements Center relations
+  requirementSets      RequirementSet[]
+  wholesaleProfile     WholesaleProfile?
+
+  // Rate Desk relations
+  providerRateSheets        ProviderRateSheet[]
+  providerRateSheetVersions ProviderRateSheetVersion[]
+  providerRates             ProviderRate[]
 
   @@index([slug])
   @@index([status])
@@ -138,8 +349,8 @@ model Role {
 model Permission {
   id       String  @id @default(dbgenerated("gen_random_uuid()"))
   key      String  @unique // canonical key, e.g. "crm:read:contacts"
-  scope    String  // e.g. "crm", "bpo", "admin"
-  action   String  // e.g. "read", "write", "delete", "manage"
+  scope    String // e.g. "crm", "bpo", "admin"
+  action   String // e.g. "read", "write", "delete", "manage"
   resource String? // e.g. "leads", "contacts"; null means all resources in scope
 
   roles RolePermission[]
@@ -174,7 +385,7 @@ model Session {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
   membership OrganizationMembership? @relation(fields: [membershipId], references: [id], onDelete: SetNull)
 
   @@index([tokenHash])
@@ -244,10 +455,10 @@ model Lead {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  contact      Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
-  assignedTo   User?        @relation("AssignedLeads", fields: [assignedToId], references: [id], onDelete: SetNull)
-  createdBy    User         @relation("CreatedLeads", fields: [createdById], references: [id])
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact      Contact?       @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  assignedTo   User?          @relation("AssignedLeads", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdBy    User           @relation("CreatedLeads", fields: [createdById], references: [id])
   campaigns    CampaignLead[]
   notes        Note[]
 
@@ -258,18 +469,18 @@ model Lead {
 }
 
 model Campaign {
-  id             String   @id @default(dbgenerated("gen_random_uuid()"))
-  organizationId String   @map("organization_id")
+  id             String    @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId String    @map("organization_id")
   name           String
-  status         String   @default("DRAFT") // DRAFT, ACTIVE, PAUSED, COMPLETED
+  status         String    @default("DRAFT") // DRAFT, ACTIVE, PAUSED, COMPLETED
   startDate      DateTime? @map("start_date")
   endDate        DateTime? @map("end_date")
-  createdById    String   @map("created_by_id")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdById    String    @map("created_by_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdBy    User         @relation(fields: [createdById], references: [id])
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User           @relation(fields: [createdById], references: [id])
   leads        CampaignLead[]
   notes        Note[]
 
@@ -296,13 +507,13 @@ model CampaignLead {
 }
 
 model Note {
-  id             String  @id @default(dbgenerated("gen_random_uuid()"))
-  organizationId String  @map("organization_id")
+  id             String   @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId String   @map("organization_id")
   content        String
-  contactId      String? @map("contact_id")
-  leadId         String? @map("lead_id")
-  campaignId     String? @map("campaign_id")
-  createdById    String  @map("created_by_id")
+  contactId      String?  @map("contact_id")
+  leadId         String?  @map("lead_id")
+  campaignId     String?  @map("campaign_id")
+  createdById    String   @map("created_by_id")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
@@ -326,16 +537,16 @@ model Note {
 // ============================================================================
 
 model Invitation {
-  id             String   @id @default(dbgenerated("gen_random_uuid()"))
+  id             String    @id @default(dbgenerated("gen_random_uuid()"))
   email          String
-  organizationId String   @map("organization_id")
-  roleId         String   @map("role_id")
-  tokenHash      String   @unique @map("token_hash")
-  status         String   @default("PENDING") // PENDING, ACCEPTED, EXPIRED, REVOKED
-  invitedById    String   @map("invited_by_id")
-  expiresAt      DateTime @map("expires_at")
+  organizationId String    @map("organization_id")
+  roleId         String    @map("role_id")
+  tokenHash      String    @unique @map("token_hash")
+  status         String    @default("PENDING") // PENDING, ACCEPTED, EXPIRED, REVOKED
+  invitedById    String    @map("invited_by_id")
+  expiresAt      DateTime  @map("expires_at")
   usedAt         DateTime? @map("used_at")
-  createdAt      DateTime @default(now()) @map("created_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   role         Role         @relation(fields: [roleId], references: [id])
@@ -352,18 +563,18 @@ model Invitation {
 // ============================================================================
 
 model VoipService {
-  id                     String   @id @default(dbgenerated("gen_random_uuid()"))
-  organizationId         String   @unique @map("organization_id")
-  status                 String   @default("ACTIVE") // ACTIVE, LOW_BALANCE, ZERO_BALANCE
-  isAdminSuspended       Boolean  @default(false) @map("is_admin_suspended")
-  customerRate           Decimal  @default(0.016) @map("customer_rate") @db.Decimal(12, 6)
-  billingIncrementSeconds Int     @default(60) @map("billing_increment_seconds")
-  minimumBillableSeconds  Int     @default(60) @map("minimum_billable_seconds")
-  reserveMinutes         Int      @default(5) @map("reserve_minutes")
-  lowBalanceThresholds   Int[]    @map("low_balance_thresholds")
-  maxCallDurationMinutes Int      @default(60) @map("max_call_duration_minutes")
-  createdAt              DateTime @default(now()) @map("created_at")
-  updatedAt              DateTime @updatedAt @map("updated_at")
+  id                      String   @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId          String   @unique @map("organization_id")
+  status                  String   @default("ACTIVE") // ACTIVE, LOW_BALANCE, ZERO_BALANCE
+  isAdminSuspended        Boolean  @default(false) @map("is_admin_suspended")
+  customerRate            Decimal  @default(0.016) @map("customer_rate") @db.Decimal(12, 6)
+  billingIncrementSeconds Int      @default(60) @map("billing_increment_seconds")
+  minimumBillableSeconds  Int      @default(60) @map("minimum_billable_seconds")
+  reserveMinutes          Int      @default(5) @map("reserve_minutes")
+  lowBalanceThresholds    Int[]    @map("low_balance_thresholds")
+  maxCallDurationMinutes  Int      @default(60) @map("max_call_duration_minutes")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -374,17 +585,17 @@ model VoipService {
 }
 
 model Wallet {
-  id           String   @id @default(dbgenerated("gen_random_uuid()"))
-  organizationId String @unique @map("organization_id")
-  balance      Decimal @default(0) @db.Decimal(12, 4)
-  reserved     Decimal @default(0) @db.Decimal(12, 4)
-  currency     String   @default("USD")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id             String   @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId String   @unique @map("organization_id")
+  balance        Decimal  @default(0) @db.Decimal(12, 4)
+  reserved       Decimal  @default(0) @db.Decimal(12, 4)
+  currency       String   @default("USD")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
-  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  transactions  WalletTransaction[]
-  reservations  WalletReservation[]
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  transactions WalletTransaction[]
+  reservations WalletReservation[]
 
   @@index([organizationId])
   @@map("wallets")
@@ -393,11 +604,11 @@ model Wallet {
 model WalletTransaction {
   id             String   @id @default(dbgenerated("gen_random_uuid()"))
   walletId       String   @map("wallet_id")
-  type           String   // CREDIT, DEBIT, REFUND, ADJUSTMENT, RESERVATION, RELEASE
+  type           String // CREDIT, DEBIT, REFUND, ADJUSTMENT, RESERVATION, RELEASE
   amount         Decimal  @db.Decimal(12, 4) // signed: positive for credit/reservation, negative for debit/release
   balanceAfter   Decimal  @map("balance_after") @db.Decimal(12, 4)
   description    String?
-  reference      String?  // internal call id, invoice id, etc.
+  reference      String? // internal call id, invoice id, etc.
   idempotencyKey String?  @unique @map("idempotency_key")
   metadata       Json?
   createdById    String?  @map("created_by_id")
@@ -423,7 +634,7 @@ model WalletReservation {
   expiresAt   DateTime? @map("expires_at")
   releasedAt  DateTime? @map("released_at")
 
-  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  wallet Wallet    @relation(fields: [walletId], references: [id], onDelete: Cascade)
   call   VoipCall? @relation(fields: [callId], references: [id], onDelete: SetNull)
 
   @@index([walletId])
@@ -448,9 +659,9 @@ model SipAccount {
   createdAt            DateTime @default(now()) @map("created_at")
   updatedAt            DateTime @updatedAt @map("updated_at")
 
-  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  calls         VoipCall[]
-  phoneNumbers  PhoneNumber[]
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  calls        VoipCall[]
+  phoneNumbers PhoneNumber[]
 
   @@unique([organizationId, username])
   @@index([organizationId])
@@ -460,62 +671,225 @@ model SipAccount {
 }
 
 model PhoneNumber {
-  id               String   @id @default(dbgenerated("gen_random_uuid()"))
-  organizationId   String   @map("organization_id")
-  sipAccountId     String?  @map("sip_account_id")
-  number               String   // E.164
+  id                   String   @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId       String   @map("organization_id")
+  sipAccountId         String?  @map("sip_account_id")
+  carrierId            String?  @map("carrier_id") // future per-number carrier assignment
+  number               String // E.164
   displayNumber        String?  @map("display_number")
   status               String   @default("ACTIVE") // ACTIVE, INACTIVE
   provider             String   @default("telnyx")
   providerNumberId     String?  @map("provider_number_id")
   providerConnectionId String?  @map("provider_connection_id")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   sipAccount   SipAccount?  @relation(fields: [sipAccountId], references: [id], onDelete: SetNull)
+  carrier      Carrier?     @relation(fields: [carrierId], references: [id], onDelete: SetNull)
   calls        VoipCall[]
 
   @@unique([organizationId, number])
   @@index([organizationId])
   @@index([number])
   @@index([sipAccountId])
+  @@index([carrierId])
   @@index([providerNumberId])
   @@index([providerConnectionId])
   @@map("phone_numbers")
 }
 
-model VoipCall {
-  id               String    @id @default(dbgenerated("gen_random_uuid()"))
-  organizationId   String    @map("organization_id")
-  sipAccountId     String?   @map("sip_account_id")
-  phoneNumberId    String?   @map("phone_number_id")
-  direction        String    // INBOUND, OUTBOUND
-  callerId         String    @map("caller_id")
-  destination      String
-  status           String    @default("INITIATED") // INITIATED, RINGING, ANSWERED, COMPLETED, BUSY, NO_ANSWER, FAILED, REJECTED, CANCELLED
-  provider         String    @default("telnyx")
-  providerCallId   String?   @map("provider_call_id")
-  startTime        DateTime? @map("start_time")
-  answerTime       DateTime? @map("answer_time")
-  endTime          DateTime? @map("end_time")
-  durationSeconds  Int?      @map("duration_seconds")
-  billableSeconds  Int?      @map("billable_seconds")
-  billedMinutes    Decimal?  @map("billed_minutes") @db.Decimal(12, 4)
-  customerRate     Decimal   @map("customer_rate") @db.Decimal(12, 6)
-  customerCharge   Decimal?  @map("customer_charge") @db.Decimal(12, 4)
-  wholesaleCost    Decimal?  @map("wholesale_cost") @db.Decimal(12, 4)
-  grossProfit      Decimal?  @map("gross_profit") @db.Decimal(12, 4)
-  failureReason    String?   @map("failure_reason")
-  routingInfo      Json?     @map("routing_info")
-  reservationId    String?   @map("reservation_id")
-  billingProcessed Boolean   @default(false) @map("billing_processed")
-  createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
+model Carrier {
+  id                      String          @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId          String?         @map("organization_id") // null = platform-wide carrier
+  name                    String
+  code                    String          @unique // e.g. "teloz", "telnyx", "twilio"
+  type                    CarrierType
+  enabled                 Boolean         @default(true)
+  status                  CarrierStatus   @default(TEST)
+  authenticationType      CarrierAuthType @map("authentication_type")
+  remoteHost              String?         @map("remote_host")
+  remotePort              Int?            @map("remote_port")
+  transport               Transport       @default(UDP)
+  localHost               String?         @map("local_host")
+  localPort               Int?            @map("local_port")
+  techPrefix              String?         @map("tech_prefix")
+  codecs                  String[]
+  maxChannels             Int?            @map("max_channels")
+  maxCps                  Int?            @map("max_cps")
+  billingIncrementSeconds Int             @default(60) @map("billing_increment_seconds")
+  minimumBillableSeconds  Int             @default(60) @map("minimum_billable_seconds")
+  defaultCallerId         String?         @map("default_caller_id")
+  cliMode                 CliMode         @default(PASS_THROUGH) @map("cli_mode")
+  notes                   String?
+  createdAt               DateTime        @default(now()) @map("created_at")
+  updatedAt               DateTime        @updatedAt @map("updated_at")
 
-  organization  Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  sipAccount    SipAccount?         @relation(fields: [sipAccountId], references: [id], onDelete: SetNull)
-  phoneNumber   PhoneNumber?      @relation(fields: [phoneNumberId], references: [id], onDelete: SetNull)
+  organization  Organization?        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  credential    CarrierCredential?
+  rates         CarrierRate[]
+  cliProfiles   CarrierCliProfile[]
+  routePolicies CarrierRoutePolicy[]
+  phoneNumbers  PhoneNumber[]
+  calls         VoipCall[]
+  provider      Provider?
+
+  @@index([organizationId])
+  @@index([code])
+  @@index([enabled])
+  @@index([status])
+  @@map("carriers")
+}
+
+model CarrierCredential {
+  id             String   @id @default(dbgenerated("gen_random_uuid()"))
+  carrierId      String   @unique @map("carrier_id")
+  username       String?
+  passwordCipher String   @map("password_cipher")
+  passwordTag    String   @map("password_tag")
+  passwordIv     String   @map("password_iv")
+  realm          String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  carrier Carrier @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+
+  @@map("carrier_credentials")
+}
+
+model CarrierRate {
+  id                      String          @id @default(dbgenerated("gen_random_uuid()"))
+  carrierId               String          @map("carrier_id")
+  prefix                  String // digits without leading '+', e.g. "30", "3069", "38640"
+  country                 String? // ISO-3166-1 alpha-2, e.g. "GR"
+  destinationType         DestinationType @map("destination_type")
+  rate                    Decimal         @db.Decimal(12, 6) // per minute
+  billingIncrementSeconds Int             @default(60) @map("billing_increment_seconds")
+  minimumBillableSeconds  Int             @default(60) @map("minimum_billable_seconds")
+  effectiveFrom           DateTime        @default(now()) @map("effective_from")
+  effectiveTo             DateTime?       @map("effective_to")
+  priority                Int             @default(0)
+  enabled                 Boolean         @default(true)
+  createdAt               DateTime        @default(now()) @map("created_at")
+  updatedAt               DateTime        @updatedAt @map("updated_at")
+
+  carrier Carrier    @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+  calls   VoipCall[]
+
+  // No unique constraint across (carrierId, prefix, destinationType) because multiple
+  // effective-dated rate versions must be able to coexist (e.g. old and new rate).
+  // Routing logic will select the currently effective record.
+  // priority is reserved for future routing decisions, not for rate-history identity.
+  @@index([carrierId])
+  @@index([prefix])
+  @@index([country])
+  @@index([destinationType])
+  @@index([enabled])
+  @@index([effectiveFrom])
+  @@index([effectiveTo])
+  @@index([priority])
+  @@index([carrierId, prefix, destinationType, enabled, effectiveFrom, effectiveTo])
+  @@map("carrier_rates")
+}
+
+model CarrierCliProfile {
+  id         String   @id @default(dbgenerated("gen_random_uuid()"))
+  carrierId  String   @map("carrier_id")
+  name       String
+  defaultCli String?  @map("default_cli")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  carrier       Carrier              @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+  entries       CarrierCliEntry[]
+  routePolicies CarrierRoutePolicy[]
+
+  @@index([carrierId])
+  @@map("carrier_cli_profiles")
+}
+
+model CarrierCliEntry {
+  id               String   @id @default(dbgenerated("gen_random_uuid()"))
+  cliProfileId     String   @map("cli_profile_id")
+  number           String
+  enabled          Boolean  @default(true)
+  allowedCountries String[] @map("allowed_countries")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  cliProfile CarrierCliProfile @relation(fields: [cliProfileId], references: [id], onDelete: Cascade)
+
+  @@index([cliProfileId])
+  @@map("carrier_cli_entries")
+}
+
+model CarrierRoutePolicy {
+  id                  String          @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId      String?         @map("organization_id")
+  countryIso          String          @map("country_iso")
+  destinationType     DestinationType @map("destination_type")
+  carrierId           String          @map("carrier_id")
+  priority            Int             @default(100)
+  enabled             Boolean         @default(true)
+  maxCpsOverride      Int?            @map("max_cps_override")
+  maxChannelsOverride Int?            @map("max_channels_override")
+  cliProfileId        String?         @map("cli_profile_id")
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
+
+  organization Organization?      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  carrier      Carrier            @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+  cliProfile   CarrierCliProfile? @relation(fields: [cliProfileId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId], map: "carrier_route_policies_organization_id_idx")
+  @@index([carrierId], map: "carrier_route_policies_carrier_id_idx")
+  @@index([cliProfileId], map: "carrier_route_policies_cli_profile_id_idx")
+  @@index([organizationId, countryIso, destinationType, enabled, priority], map: "carrier_route_policies_org_country_type_enabled_priority_idx")
+  @@map("carrier_route_policies")
+}
+
+model VoipCall {
+  id                    String    @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId        String    @map("organization_id")
+  sipAccountId          String?   @map("sip_account_id")
+  phoneNumberId         String?   @map("phone_number_id")
+  direction             String // INBOUND, OUTBOUND
+  callerId              String    @map("caller_id")
+  destination           String
+  status                String    @default("INITIATED") // INITIATED, RINGING, ANSWERED, COMPLETED, BUSY, NO_ANSWER, FAILED, REJECTED, CANCELLED
+  provider              String    @default("telnyx")
+  providerCallId        String?   @map("provider_call_id")
+  // Multi-carrier wholesale VoIP extensions (all nullable for backward compatibility)
+  carrierId             String?   @map("carrier_id")
+  carrierRateId         String?   @map("carrier_rate_id")
+  gatewayCallId         String?   @map("gateway_call_id")
+  normalizedDestination String?   @map("normalized_destination")
+  destinationCountry    String?   @map("destination_country")
+  destinationType       String?   @map("destination_type") // mirrors DestinationType values
+  sipResponseCode       Int?      @map("sip_response_code")
+  wholesaleRate         Decimal?  @map("wholesale_rate") @db.Decimal(12, 6)
+  // --- existing fields below remain unchanged ---
+  startTime             DateTime? @map("start_time")
+  answerTime            DateTime? @map("answer_time")
+  endTime               DateTime? @map("end_time")
+  durationSeconds       Int?      @map("duration_seconds")
+  billableSeconds       Int?      @map("billable_seconds")
+  billedMinutes         Decimal?  @map("billed_minutes") @db.Decimal(12, 4)
+  customerRate          Decimal   @map("customer_rate") @db.Decimal(12, 6)
+  customerCharge        Decimal?  @map("customer_charge") @db.Decimal(12, 4)
+  wholesaleCost         Decimal?  @map("wholesale_cost") @db.Decimal(12, 4)
+  grossProfit           Decimal?  @map("gross_profit") @db.Decimal(12, 4)
+  failureReason         String?   @map("failure_reason")
+  routingInfo           Json?     @map("routing_info")
+  reservationId         String?   @map("reservation_id")
+  billingProcessed      Boolean   @default(false) @map("billing_processed")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  organization  Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sipAccount    SipAccount?        @relation(fields: [sipAccountId], references: [id], onDelete: SetNull)
+  phoneNumber   PhoneNumber?       @relation(fields: [phoneNumberId], references: [id], onDelete: SetNull)
+  carrier       Carrier?           @relation(fields: [carrierId], references: [id], onDelete: SetNull)
+  carrierRate   CarrierRate?       @relation(fields: [carrierRateId], references: [id], onDelete: SetNull)
   reservation   WalletReservation?
   webhookEvents WebhookEvent[]
 
@@ -527,19 +901,21 @@ model VoipCall {
   @@index([createdAt])
   @@index([destination])
   @@index([startTime])
+  @@index([carrierId])
+  @@index([carrierRateId])
   @@map("voip_calls")
 }
 
 model WebhookEvent {
-  id               String    @id @default(dbgenerated("gen_random_uuid()"))
-  provider         String
-  providerEventId    String    @map("provider_event_id")
-  eventType        String    @map("event_type")
-  payload          Json
-  status           String    @default("PENDING") // PENDING, PROCESSED, FAILED
-  callId           String?   @map("call_id")
-  processedAt      DateTime? @map("processed_at")
-  createdAt        DateTime  @default(now()) @map("created_at")
+  id              String    @id @default(dbgenerated("gen_random_uuid()"))
+  provider        String
+  providerEventId String    @map("provider_event_id")
+  eventType       String    @map("event_type")
+  payload         Json
+  status          String    @default("PENDING") // PENDING, PROCESSED, FAILED
+  callId          String?   @map("call_id")
+  processedAt     DateTime? @map("processed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
 
   call VoipCall? @relation(fields: [callId], references: [id], onDelete: SetNull)
 
@@ -561,7 +937,7 @@ model Notification {
   createdAt        DateTime @default(now()) @map("created_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user           User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@index([userId])
@@ -571,15 +947,15 @@ model Notification {
 }
 
 model AuditLog {
-  id             String    @id @default(dbgenerated("gen_random_uuid()"))
-  actorId        String?   @map("actor_id")
-  organizationId String?   @map("organization_id")
+  id             String   @id @default(dbgenerated("gen_random_uuid()"))
+  actorId        String?  @map("actor_id")
+  organizationId String?  @map("organization_id")
   action         String
   resource       String
-  resourceId     String?   @map("resource_id")
+  resourceId     String?  @map("resource_id")
   metadata       Json?
-  ipAddress      String?   @map("ip_address")
-  createdAt      DateTime  @default(now()) @map("created_at")
+  ipAddress      String?  @map("ip_address")
+  createdAt      DateTime @default(now()) @map("created_at")
 
   actor        User?         @relation("AuditLogActor", fields: [actorId], references: [id], onDelete: SetNull)
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
@@ -596,31 +972,31 @@ model AuditLog {
 // ============================================================================
 
 model KycRecord {
-  id                        String   @id @default(dbgenerated("gen_random_uuid()"))
-  organizationId            String   @unique @map("organization_id")
-  legalBusinessName         String?  @map("legal_business_name")
-  businessType              String?  @map("business_type")
-  country                   String?
-  stateProvince             String?  @map("state_province")
-  businessRegistrationInfo  String?  @map("business_registration_info")
-  website                   String?
-  businessDescription       String?  @map("business_description")
-  intendedUseCase           String?  @map("intended_use_case")
-  expectedMonthlyVolume     String?  @map("expected_monthly_volume")
-  expectedDestinations      String?  @map("expected_destinations")
-  callerIdInfo              String?  @map("caller_id_info")
-  contactEmail              String?  @map("contact_email")
-  contactPhone              String?  @map("contact_phone")
-  status                    KycRecordStatus @default(DRAFT) @map("status")
-  reviewedById              String?  @map("reviewed_by_id")
-  reviewedAt                DateTime? @map("reviewed_at")
-  rejectionReason           String?  @map("rejection_reason")
-  moreInfoReason            String?  @map("more_info_reason")
-  createdAt                 DateTime @default(now()) @map("created_at")
-  updatedAt                 DateTime @updatedAt @map("updated_at")
+  id                       String          @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId           String          @unique @map("organization_id")
+  legalBusinessName        String?         @map("legal_business_name")
+  businessType             String?         @map("business_type")
+  country                  String?
+  stateProvince            String?         @map("state_province")
+  businessRegistrationInfo String?         @map("business_registration_info")
+  website                  String?
+  businessDescription      String?         @map("business_description")
+  intendedUseCase          String?         @map("intended_use_case")
+  expectedMonthlyVolume    String?         @map("expected_monthly_volume")
+  expectedDestinations     String?         @map("expected_destinations")
+  callerIdInfo             String?         @map("caller_id_info")
+  contactEmail             String?         @map("contact_email")
+  contactPhone             String?         @map("contact_phone")
+  status                   KycRecordStatus @default(DRAFT) @map("status")
+  reviewedById             String?         @map("reviewed_by_id")
+  reviewedAt               DateTime?       @map("reviewed_at")
+  rejectionReason          String?         @map("rejection_reason")
+  moreInfoReason           String?         @map("more_info_reason")
+  createdAt                DateTime        @default(now()) @map("created_at")
+  updatedAt                DateTime        @updatedAt @map("updated_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  reviewedBy   User?       @relation("KycRecordReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  reviewedBy   User?         @relation("KycRecordReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
   documents    KycDocument[]
 
   @@index([organizationId])
@@ -630,21 +1006,444 @@ model KycRecord {
 }
 
 model KycDocument {
-  id           String   @id @default(dbgenerated("gen_random_uuid()"))
-  kycRecordId  String   @map("kyc_record_id")
-  type         String
-  name         String
-  description  String?
-  contentType  String?  @map("content_type")
-  storageKey   String?  @map("storage_key")
-  source       String   @default("METADATA_ONLY") // METADATA_ONLY, STORED
-  status       String   @default("PENDING") // PENDING, APPROVED, REJECTED
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id          String   @id @default(dbgenerated("gen_random_uuid()"))
+  kycRecordId String   @map("kyc_record_id")
+  type        String
+  name        String
+  description String?
+  contentType String?  @map("content_type")
+  storageKey  String?  @map("storage_key")
+  source      String   @default("METADATA_ONLY") // METADATA_ONLY, STORED
+  status      String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   kycRecord KycRecord @relation(fields: [kycRecordId], references: [id], onDelete: Cascade)
 
   @@index([kycRecordId])
   @@index([type])
   @@map("kyc_documents")
+}
+
+// ============================================================================
+// Provider CRM — wholesale carrier relationship management (internal)
+// organizationId is the OWNING Shivaksa organization, not the provider's
+// tenant; providers are counterparties, not platform tenants.
+// ============================================================================
+
+model Provider {
+  id             String                  @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId String                  @map("organization_id")
+  companyName    String                  @map("company_name")
+  tradingName    String?                 @map("trading_name")
+  website        String?
+  country        String?
+  lifecycleStage ProviderLifecycleStage  @default(PROSPECT) @map("lifecycle_stage")
+  status         String                  @default("ACTIVE") // ACTIVE, SUSPENDED, CLOSED
+  carrierId      String?                 @unique @map("carrier_id") // optional link to live traffic config
+  stageChangedAt DateTime                @default(now()) @map("stage_changed_at")
+  createdAt      DateTime                @default(now()) @map("created_at")
+  updatedAt      DateTime                @updatedAt @map("updated_at")
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  carrier      Carrier?             @relation(fields: [carrierId], references: [id], onDelete: SetNull)
+  contacts     ProviderContact[]
+  submissions  ProviderSubmission[]
+  notes        ProviderNote[]
+  tasks        ProviderTask[]
+  rateSheets   ProviderRateSheet[]
+  rates        ProviderRate[]
+
+  @@index([organizationId])
+  @@index([lifecycleStage])
+  @@index([status])
+  @@index([country])
+  @@map("providers")
+}
+
+model ProviderContact {
+  id         String              @id @default(dbgenerated("gen_random_uuid()"))
+  providerId String              @map("provider_id")
+  role       ProviderContactRole
+  name       String
+  email      String?
+  phone      String?
+  notes      String?
+  createdAt  DateTime            @default(now()) @map("created_at")
+  updatedAt  DateTime            @updatedAt @map("updated_at")
+
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId])
+  @@index([role])
+  @@map("provider_contacts")
+}
+
+// Tokenized read-only onboarding links for prospective providers (Model A).
+// Raw token is never stored; only the SHA-256 hash.
+model OnboardingLink {
+  id                String    @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId    String    @map("organization_id")
+  tokenHash         String    @unique @map("token_hash")
+  label             String?
+  expiresAt         DateTime? @map("expires_at")
+  revokedAt         DateTime? @map("revoked_at")
+  maxSubmissions    Int?      @map("max_submissions")
+  accessCodeHash    String?   @map("access_code_hash")
+  viewCount         Int       @default(0) @map("view_count")
+  submissionCount   Int       @default(0) @map("submission_count")
+  lastViewedAt      DateTime? @map("last_viewed_at")
+  createdById       String?   @map("created_by_id")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?                @relation("OnboardingLinkCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  submissions  ProviderSubmission[]
+  documents    ProviderSubmissionDocument[]
+
+  @@index([tokenHash])
+  @@index([organizationId])
+  @@map("onboarding_links")
+}
+
+// Structured intake from a provider-facing onboarding form. Submissions land
+// here only; promotion to a Provider record is a manual staff action.
+model ProviderSubmission {
+  id              String                   @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId  String                   @map("organization_id")
+  onboardingLinkId String?                 @map("onboarding_link_id")
+  providerId      String?                  @map("provider_id") // set when promoted to a Prospect
+  companyName     String                   @map("company_name")
+  website         String?
+  country         String?
+  contactEmail    String?                  @map("contact_email")
+  status          ProviderSubmissionStatus @default(NEW)
+  payload         Json                     // full questionnaire data (company, contacts, rates, technical, commercial)
+  reviewedById    String?                  @map("reviewed_by_id")
+  reviewedAt      DateTime?                @map("reviewed_at")
+  reviewNotes     String?                  @map("review_notes")
+  createdAt       DateTime                 @default(now()) @map("created_at")
+  updatedAt       DateTime                 @updatedAt @map("updated_at")
+
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  onboardingLink OnboardingLink? @relation(fields: [onboardingLinkId], references: [id], onDelete: SetNull)
+  provider       Provider?       @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  reviewedBy     User?           @relation("ProviderSubmissionReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  documents      ProviderSubmissionDocument[]
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([onboardingLinkId])
+  @@index([providerId])
+  @@index([contactEmail])
+  @@map("provider_submissions")
+}
+
+// Provider-uploaded document metadata. Files live in private object storage —
+// never in the public web root — addressed by a random storedObjectKey. Rows
+// are created PENDING against an onboarding link and become ATTACHED to the
+// submission snapshot when the provider submits intake.
+model ProviderSubmissionDocument {
+  id               String                           @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId   String                           @map("organization_id")
+  onboardingLinkId String                           @map("onboarding_link_id")
+  submissionId     String?                          @map("submission_id")
+  category         ProviderDocumentCategory
+  originalFileName String                           @map("original_file_name")
+  storedObjectKey  String                           @unique @map("stored_object_key")
+  mimeType         String                           @map("mime_type")
+  sizeBytes        Int                              @map("size_bytes")
+  description      String?
+  status           ProviderSubmissionDocumentStatus @default(PENDING)
+  scanStatus       String                           @default("NOT_SCANNED") @map("scan_status")
+  createdAt        DateTime                         @default(now()) @map("created_at")
+
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  onboardingLink OnboardingLink      @relation(fields: [onboardingLinkId], references: [id], onDelete: Cascade)
+  submission     ProviderSubmission? @relation(fields: [submissionId], references: [id], onDelete: SetNull)
+  rateSheets     ProviderRateSheet[]
+
+  @@index([organizationId])
+  @@index([onboardingLinkId])
+  @@index([submissionId])
+  @@index([status])
+  @@map("provider_submission_documents")
+}
+
+// Internal-only notes. Never have a visibility flag — structurally internal.
+model ProviderNote {
+  id         String   @id @default(dbgenerated("gen_random_uuid()"))
+  providerId String   @map("provider_id")
+  authorId   String?  @map("author_id")
+  body       String
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  author   User?    @relation("ProviderNoteAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([providerId])
+  @@index([authorId])
+  @@map("provider_notes")
+}
+
+model ProviderTask {
+  id          String            @id @default(dbgenerated("gen_random_uuid()"))
+  providerId  String            @map("provider_id")
+  type        ProviderTaskType  @default(GENERAL)
+  status      ProviderTaskStatus @default(OPEN)
+  title       String
+  description String?
+  assigneeId  String?           @map("assignee_id")
+  dueDate     DateTime?         @map("due_date")
+  createdById String?           @map("created_by_id")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  provider  Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  assignee  User?    @relation("ProviderTaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdBy User?    @relation("ProviderTaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([providerId])
+  @@index([status])
+  @@index([assigneeId])
+  @@index([dueDate])
+  @@map("provider_tasks")
+}
+
+// ============================================================================
+// Requirements Center — Shivaksa's internal source of truth for what it
+// requires from wholesale traffic providers. Org-owned, never provider-owned.
+//
+// RequirementSet        = live working definition (sections editable)
+// RequirementVersion    = immutable version snapshot of the set
+// RequirementVersionSection = immutable section snapshots inside a version
+// ============================================================================
+
+model RequirementSet {
+  id             String              @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId String              @map("organization_id")
+  name           String
+  description    String?
+  status         RequirementSetStatus @default(DRAFT)
+  // Points at RequirementVersion.versionNumber — a scalar, not an FK, to
+  // avoid a circular dependency and keep versions historically independent.
+  currentVersion Int?                @map("current_version")
+  createdById    String?             @map("created_by_id")
+  updatedById    String?             @map("updated_by_id")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?                @relation("RequirementSetCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy    User?                @relation("RequirementSetUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+  sections     RequirementSection[]
+  versions     RequirementVersion[]
+  wholesaleProfiles WholesaleProfile[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@index([status])
+  @@map("requirement_sets")
+}
+
+// Live section of a RequirementSet. `key` is a stable string identifier
+// (COMPANY_PROFILE, TRAFFIC_PROFILE, ...) validated at the application layer.
+// INTERNAL = never leaves internal scope. PUBLISHABLE = eligible for a future
+// provider-facing Wholesale Profile; does not imply public access.
+model RequirementSection {
+  id               String                @id @default(dbgenerated("gen_random_uuid()"))
+  requirementSetId String                @map("requirement_set_id")
+  key              String
+  title            String
+  description      String?
+  sortOrder        Int                   @default(0) @map("sort_order")
+  visibility       RequirementVisibility @default(INTERNAL)
+  isRequired       Boolean               @default(true) @map("is_required")
+  content          Json?
+  createdAt        DateTime              @default(now()) @map("created_at")
+  updatedAt        DateTime              @updatedAt @map("updated_at")
+
+  requirementSet RequirementSet @relation(fields: [requirementSetId], references: [id], onDelete: Cascade)
+
+  @@unique([requirementSetId, key])
+  @@index([requirementSetId])
+  @@index([visibility])
+  @@map("requirement_sections")
+}
+
+model RequirementVersion {
+  id               String                   @id @default(dbgenerated("gen_random_uuid()"))
+  requirementSetId String                   @map("requirement_set_id")
+  versionNumber    Int                      @map("version_number")
+  status           RequirementVersionStatus @default(DRAFT)
+  changeSummary    String?                  @map("change_summary")
+  createdById      String?                  @map("created_by_id")
+  createdAt        DateTime                 @default(now()) @map("created_at")
+  publishedById    String?                  @map("published_by_id")
+  publishedAt      DateTime?                @map("published_at")
+
+  requirementSet RequirementSet              @relation(fields: [requirementSetId], references: [id], onDelete: Cascade)
+  createdBy      User?                       @relation("RequirementVersionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  publishedBy    User?                       @relation("RequirementVersionPublisher", fields: [publishedById], references: [id], onDelete: SetNull)
+  sections       RequirementVersionSection[]
+
+  @@unique([requirementSetId, versionNumber])
+  @@index([requirementSetId])
+  @@index([status])
+  @@map("requirement_versions")
+}
+
+model RequirementVersionSection {
+  id                   String                @id @default(dbgenerated("gen_random_uuid()"))
+  requirementVersionId String                @map("requirement_version_id")
+  key                  String
+  title                String
+  description          String?
+  sortOrder            Int                   @default(0) @map("sort_order")
+  visibility           RequirementVisibility @default(INTERNAL)
+  isRequired           Boolean               @default(true) @map("is_required")
+  content              Json?
+  createdAt            DateTime              @default(now()) @map("created_at")
+
+  requirementVersion RequirementVersion @relation(fields: [requirementVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([requirementVersionId, key])
+  @@index([requirementVersionId])
+  @@index([visibility])
+  @@map("requirement_version_sections")
+}
+
+// ============================================================================
+// Wholesale Profile — the provider-facing presentation configuration.
+// Org-owned (Shivaksa), one profile per organization. It does NOT duplicate
+// requirement content; it points at a published RequirementVersion of the
+// organization's RequirementSet and provider-safe resolution reads the
+// immutable RequirementVersionSection snapshots.
+// publishedVersionNumber is a scalar pointer (same design as
+// RequirementSet.currentVersion) — no circular FK.
+// ============================================================================
+
+model WholesaleProfile {
+  id                     String                 @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId         String                 @map("organization_id")
+  requirementSetId       String                 @map("requirement_set_id")
+  publishedVersionNumber Int?                   @map("published_version_number")
+  status                 WholesaleProfileStatus @default(DRAFT)
+  title                  String
+  subtitle               String?
+  createdById            String?                @map("created_by_id")
+  updatedById            String?                @map("updated_by_id")
+  createdAt              DateTime               @default(now()) @map("created_at")
+  updatedAt              DateTime               @updatedAt @map("updated_at")
+
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  requirementSet RequirementSet @relation(fields: [requirementSetId], references: [id], onDelete: Restrict)
+  createdBy      User?          @relation("WholesaleProfileCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy      User?          @relation("WholesaleProfileUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  // One primary wholesale profile per organization.
+  @@unique([organizationId])
+  @@index([requirementSetId])
+  @@index([status])
+  @@map("wholesale_profiles")
+}
+
+// ============================================================================
+// Rate Desk models — internal provider rate management.
+// Provider = upstream supplier (CRM). ProviderRateSheet = a rate offer/document
+// received from that provider. Versions are immutable once PUBLISHED; rate rows
+// hang off a version so history is never destructively overwritten.
+// Structurally isolated from carriers/carrier_rates: a row here never activates
+// routing — activation is a separate explicit internal action (future phase).
+// ============================================================================
+
+model ProviderRateSheet {
+  id               String                  @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId   String                  @map("organization_id")
+  providerId       String                  @map("provider_id")
+  label            String
+  source           ProviderRateSheetSource @default(MANUAL)
+  sourceDocumentId String?                 @map("source_document_id")
+  status           ProviderRateSheetStatus @default(RECEIVED)
+  currentVersion   Int?                    @map("current_version")
+  receivedAt       DateTime                @default(now()) @map("received_at")
+  notes            String?
+  createdById      String?                 @map("created_by_id")
+  createdAt        DateTime                @default(now()) @map("created_at")
+  updatedAt        DateTime                @updatedAt @map("updated_at")
+
+  organization   Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  provider       Provider                    @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  sourceDocument ProviderSubmissionDocument? @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+  createdBy      User?                       @relation("ProviderRateSheetCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  versions       ProviderRateSheetVersion[]
+
+  @@index([organizationId])
+  @@index([providerId])
+  @@index([status])
+  @@index([sourceDocumentId])
+  @@map("provider_rate_sheets")
+}
+
+// Immutable once PUBLISHED. Sheet.currentVersion is the pointer to the active
+// published version number (same pattern as RequirementSet.currentVersion).
+model ProviderRateSheetVersion {
+  id             String                         @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId String                         @map("organization_id")
+  sheetId        String                         @map("sheet_id")
+  version        Int
+  status         ProviderRateSheetVersionStatus @default(DRAFT)
+  publishedAt    DateTime?                      @map("published_at")
+  publishedById  String?                        @map("published_by_id")
+  notes          String?
+  createdAt      DateTime                       @default(now()) @map("created_at")
+  updatedAt      DateTime                       @updatedAt @map("updated_at")
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sheet        ProviderRateSheet  @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  publishedBy  User?              @relation("ProviderRateSheetVersionPublisher", fields: [publishedById], references: [id], onDelete: SetNull)
+  rates        ProviderRate[]
+
+  @@unique([sheetId, version])
+  @@index([organizationId])
+  @@index([status])
+  @@map("provider_rate_sheet_versions")
+}
+
+// A single provider-offered rate row. Decimal(14,8) supports sub-cent wholesale
+// pricing and more precise future values; currency is an ISO-4217 code
+// (USD/EUR today, additional codes are schema-compatible).
+// Billing notation "first/increment" e.g. 60/1 = firstIncrementSeconds 60,
+// incrementSeconds 1. minimumDurationSeconds is a separate chargeable floor.
+model ProviderRate {
+  id                     String                @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId         String                @map("organization_id")
+  providerId             String                @map("provider_id")
+  versionId              String                @map("version_id")
+  destination            String?               // human-readable, e.g. "Greece Mobile"
+  countryIso             String?               @map("country_iso") // ISO-3166-1 alpha-2
+  prefix                 String                // digits only, no leading '+'
+  routeType              ProviderRateRouteType @map("route_type")
+  rate                   Decimal               @db.Decimal(14, 8) // per minute
+  currency               String                @default("USD")
+  firstIncrementSeconds  Int                   @default(1) @map("first_increment_seconds")
+  incrementSeconds       Int                   @default(1) @map("increment_seconds")
+  minimumDurationSeconds Int                   @default(0) @map("minimum_duration_seconds")
+  effectiveFrom          DateTime              @default(now()) @map("effective_from")
+  effectiveTo            DateTime?             @map("effective_to")
+  notes                  String?
+  createdAt              DateTime              @default(now()) @map("created_at")
+
+  organization Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  provider     Provider                 @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  version      ProviderRateSheetVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([providerId])
+  @@index([versionId])
+  @@index([prefix])
+  @@index([countryIso])
+  @@index([organizationId, providerId, prefix, routeType, effectiveFrom, effectiveTo])
+  @@map("provider_rates")
 }

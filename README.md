@@ -147,6 +147,32 @@ npm run dev
 - `npm start` - Start production server
 - `npm run lint` - Run ESLint
 - `npm run format` - Format code with Prettier
+- `npm run bootstrap:first-admin` - Validate first-admin bootstrap prerequisites without writing data
+
+### First Administrator Bootstrap
+
+The first administrator is created only through the server-side CLI after RBAC has been seeded. Public registration must not be used as a first-admin bootstrap.
+
+Required server configuration:
+
+- `BOOTSTRAP_OWNER_EMAIL`
+- `BOOTSTRAP_OWNER_NAME`
+- `BOOTSTRAP_ORGANIZATION_NAME`
+- `BOOTSTRAP_TOKEN_HASH` (SHA-256 hex digest of the one-time token)
+
+The default command is validation-only:
+
+```bash
+npm run bootstrap:first-admin
+```
+
+After reviewing a successful dry run, an authorized operator may execute the one-time transaction explicitly:
+
+```bash
+npm run bootstrap:first-admin -- --execute
+```
+
+Both commands prompt for the bootstrap token and owner password without echoing them. Execution requires a root-owned, non-group/world-writable `/var/lib/shivaksa-platform` directory for the mode `0600` completion marker. The command refuses to write when users already exist, required RBAC records are missing, or the marker exists.
 
 ## API Endpoints
 

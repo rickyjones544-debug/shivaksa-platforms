@@ -117,6 +117,64 @@ const allPermissions = [
   { scope: 'wallet', action: 'read' },
   { scope: 'wallet', action: 'write' },
 
+  // Multi-carrier wholesale VoIP administration
+  { scope: 'carrier', action: 'manage' },
+  { scope: 'carrier', action: 'read' },
+  { scope: 'carrier', action: 'write' },
+  { scope: 'carrier', action: 'delete' },
+  { scope: 'carrier-rate', action: 'manage' },
+  { scope: 'carrier-rate', action: 'read' },
+  { scope: 'carrier-rate', action: 'write' },
+  { scope: 'carrier-rate', action: 'delete' },
+  { scope: 'carrier-route', action: 'manage' },
+  { scope: 'carrier-route', action: 'read' },
+  { scope: 'carrier-route', action: 'write' },
+  { scope: 'carrier-route', action: 'delete' },
+
+  // Provider CRM — wholesale carrier relationship management (internal only)
+  { scope: 'provider', action: 'manage' },
+  { scope: 'provider', action: 'read' },
+  { scope: 'provider', action: 'write' },
+  { scope: 'provider', action: 'delete' },
+  { scope: 'provider', action: 'read', resource: 'submissions' },
+  { scope: 'provider', action: 'write', resource: 'submissions' },
+  { scope: 'provider', action: 'read', resource: 'links' },
+  { scope: 'provider', action: 'write', resource: 'links' },
+  { scope: 'rate-desk', action: 'manage' },
+  { scope: 'rate-desk', action: 'read' },
+  { scope: 'rate-desk', action: 'write' },
+  { scope: 'rate-desk', action: 'delete' },
+  { scope: 'connectivity', action: 'manage' },
+  { scope: 'connectivity', action: 'read' },
+  { scope: 'connectivity', action: 'write' },
+  { scope: 'connectivity', action: 'delete' },
+  { scope: 'traffic', action: 'manage' },
+  { scope: 'traffic', action: 'read' },
+  { scope: 'traffic', action: 'write' },
+  { scope: 'traffic', action: 'delete' },
+  { scope: 'provider-billing', action: 'manage' },
+  { scope: 'provider-billing', action: 'read' },
+  { scope: 'provider-billing', action: 'write' },
+  { scope: 'provider-billing', action: 'delete' },
+  { scope: 'documents', action: 'manage' },
+  { scope: 'documents', action: 'read' },
+  { scope: 'documents', action: 'write' },
+  { scope: 'documents', action: 'delete' },
+  { scope: 'wholesale-profile', action: 'manage' },
+  { scope: 'wholesale-profile', action: 'read' },
+  { scope: 'wholesale-profile', action: 'write' },
+  { scope: 'wholesale-profile', action: 'delete' },
+  { scope: 'wholesale-profile', action: 'publish' },
+  { scope: 'wholesale-profile', action: 'archive' },
+
+  // Requirements Center — internal wholesale provider requirements
+  { scope: 'requirements', action: 'manage' },
+  { scope: 'requirements', action: 'read' },
+  { scope: 'requirements', action: 'write' },
+  { scope: 'requirements', action: 'delete' },
+  { scope: 'requirements', action: 'publish' },
+  { scope: 'requirements', action: 'archive' },
+
   // Audit logging
   { scope: 'audit', action: 'manage' },
   { scope: 'audit', action: 'read' },
@@ -133,13 +191,16 @@ const systemRoles = [
     name: 'SUPER_ADMIN',
     description: 'Platform-wide super administrator with unrestricted access',
     permissions: allInScopes([
-      'admin', 'organization', 'membership', 'invitation', 'crm', 'bpo', 'qa', 'reports', 'billing', 'development', 'ai', 'voip', 'wallet', 'audit',
-    ]),
+      'admin', 'organization', 'membership', 'invitation', 'crm', 'bpo', 'qa', 'reports', 'billing', 'development', 'ai', 'voip', 'wallet', 'carrier', 'carrier-rate', 'carrier-route', 'provider', 'rate-desk', 'connectivity', 'traffic', 'provider-billing', 'documents', 'wholesale-profile', 'requirements', 'audit',
+    ], ['read', 'write', 'delete', 'manage', 'publish', 'archive']),
   },
   {
     name: 'OPERATIONS_MANAGER',
     description: 'Manages platform operations across organizations',
-    permissions: allInScopes(['admin', 'organization', 'membership', 'invitation', 'bpo', 'qa', 'reports', 'ai', 'voip', 'wallet', 'audit']),
+    permissions: allInScopes(
+      ['admin', 'organization', 'membership', 'invitation', 'bpo', 'qa', 'reports', 'ai', 'voip', 'wallet', 'carrier', 'carrier-rate', 'carrier-route', 'provider', 'rate-desk', 'connectivity', 'traffic', 'provider-billing', 'documents', 'wholesale-profile', 'requirements', 'audit'],
+      ['read', 'write', 'delete', 'manage', 'publish', 'archive']
+    ),
   },
   {
     name: 'QA_MANAGER',
@@ -149,7 +210,7 @@ const systemRoles = [
   {
     name: 'INTERNAL_STAFF',
     description: 'Internal platform staff with limited operational access',
-    permissions: allInScopes(['reports', 'bpo', 'crm'], ['read']),
+    permissions: allInScopes(['reports', 'bpo', 'crm', 'provider', 'rate-desk', 'traffic', 'requirements', 'wholesale-profile'], ['read']),
   },
   {
     name: 'CLIENT_ADMIN',
@@ -167,6 +228,17 @@ const systemRoles = [
     ),
   },
   {
+    name: 'CLIENT_VOIP_SUPPORT',
+    description: 'Tenant-scoped browser calling and VoIP support access',
+    permissions: [
+      permissionKey('voip', 'read', 'calls'),
+      permissionKey('voip', 'write', 'calls'),
+      permissionKey('voip', 'read', 'sip'),
+      permissionKey('voip', 'read', 'numbers'),
+      permissionKey('wallet', 'read'),
+    ],
+  },
+  {
     name: 'SUPERVISOR',
     description: 'Supervises BPO agents and QA within an organization',
     permissions: allInScopes(['bpo', 'qa', 'reports'], ['read', 'write', 'manage']),
@@ -180,6 +252,19 @@ const systemRoles = [
       permissionKey('qa', 'read', 'forms'),
       permissionKey('qa', 'write', 'reviews'),
       permissionKey('reports', 'read'),
+    ],
+  },
+  {
+    name: 'CARRIER_MANAGER',
+    description: 'Manages wholesale provider relationships, rates, connectivity and commercial terms',
+    permissions: [
+      ...allInScopes(
+        ['provider', 'rate-desk', 'connectivity', 'traffic', 'provider-billing', 'documents', 'wholesale-profile', 'carrier', 'carrier-rate', 'carrier-route', 'audit'],
+        ['read', 'write', 'manage']
+      ),
+      // Carrier managers read and update requirements but cannot publish, archive or delete them
+      permissionKey('requirements', 'read'),
+      permissionKey('requirements', 'write'),
     ],
   },
 ];

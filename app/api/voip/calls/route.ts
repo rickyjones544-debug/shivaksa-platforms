@@ -34,11 +34,16 @@ export async function POST(request: NextRequest) {
       action: 'write',
       resource: 'calls',
       handler: async (ctx) => {
-        const body = await readBody<{ sipAccountId: string; destination: string }>(request);
-        const result = await initiateOutboundCall(ctx, body);
+        const body = await readBody<{
+          sipAccountId: string;
+          destination: string;
+        }>(request);
+        const result = await initiateOutboundCall(ctx, {
+          sipAccountId: body.sipAccountId,
+          destination: body.destination,
+        });
         return {
           callId: result.callId,
-          providerCallId: result.providerCallId,
           callerId: result.callerId,
           destination: result.destination,
           maxDurationMinutes: result.maxDurationMinutes,

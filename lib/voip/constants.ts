@@ -81,6 +81,52 @@ export const ProviderName = {
 
 export type ProviderName = (typeof ProviderName)[keyof typeof ProviderName];
 
+export const CarrierType = {
+  API: 'API',
+  SIP_GATEWAY: 'SIP_GATEWAY',
+} as const;
+
+export type CarrierType = (typeof CarrierType)[keyof typeof CarrierType];
+
+export const CarrierAuthType = {
+  IP_AUTH: 'IP_AUTH',
+  CREDENTIAL_AUTH: 'CREDENTIAL_AUTH',
+} as const;
+
+export type CarrierAuthType = (typeof CarrierAuthType)[keyof typeof CarrierAuthType];
+
+export const CarrierStatus = {
+  TEST: 'TEST',
+  ACTIVE: 'ACTIVE',
+  SUSPENDED: 'SUSPENDED',
+} as const;
+
+export type CarrierStatus = (typeof CarrierStatus)[keyof typeof CarrierStatus];
+
+export const Transport = {
+  UDP: 'UDP',
+  TCP: 'TCP',
+  TLS: 'TLS',
+} as const;
+
+export type Transport = (typeof Transport)[keyof typeof Transport];
+
+export const CliMode = {
+  FIXED: 'FIXED',
+  POOL: 'POOL',
+  PASS_THROUGH: 'PASS_THROUGH',
+} as const;
+
+export type CliMode = (typeof CliMode)[keyof typeof CliMode];
+
+export const DestinationType = {
+  FIXED: 'FIXED',
+  MOBILE: 'MOBILE',
+  ALL: 'ALL',
+} as const;
+
+export type DestinationType = (typeof DestinationType)[keyof typeof DestinationType];
+
 export const DEFAULT_CUSTOMER_RATE_CENTS_PER_MINUTE = '0.016';
 export const DEFAULT_RESERVE_MINUTES = 5;
 export const DEFAULT_MAX_CALL_DURATION_MINUTES = 60;

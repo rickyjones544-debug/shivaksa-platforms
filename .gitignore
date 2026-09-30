@@ -44,3 +44,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# private object storage (provider submission documents)
+/storage/private/
+
+# ad-hoc API/debug response dumps (e.g. telapp.json)
+telapp*.json
