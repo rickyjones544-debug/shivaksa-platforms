@@ -4,6 +4,7 @@ const nav = [
   { href: '#solutions', label: 'Solutions' },
   { href: '#technology', label: 'Technology' },
   { href: '#industries', label: 'Industries' },
+  { href: '/contact', label: 'Contact' },
 ];
 
 const services = [
@@ -221,6 +222,9 @@ export default function Home() {
             ))}
           </nav>
           <div className="flex items-center gap-3">
+            <Link href="/contact" className="inline-flex text-sm font-medium text-slate-300 hover:text-white transition">
+              Contact
+            </Link>
             <Link href="/login" className="hidden sm:inline-flex text-sm font-medium text-slate-300 hover:text-white transition">
               Client Login
             </Link>
@@ -448,12 +452,12 @@ export default function Home() {
                 >
                   Request access
                 </Link>
-                <a
-                  href="mailto:info@shivaksatechnology.com"
+                <Link
+                  href="/contact"
                   className="inline-flex items-center justify-center px-8 py-3.5 text-base font-medium text-slate-200 border border-white/20 rounded-xl hover:bg-white/5 transition"
                 >
                   Talk to Shivaksa
-                </a>
+                </Link>
               </div>
             </div>
           </div>
@@ -491,6 +495,7 @@ export default function Home() {
           <div>
             <h4 className="font-medium text-white mb-4">Contact</h4>
             <ul className="space-y-2 text-sm text-slate-400">
+              <li><Link href="/contact" className="hover:text-white transition">Contact us</Link></li>
               <li><a href="mailto:info@shivaksatechnology.com" className="hover:text-white transition">info@shivaksatechnology.com</a></li>
               <li><Link href="/login" className="hover:text-white transition">Client Login</Link></li>
             </ul>
