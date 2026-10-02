@@ -207,7 +207,7 @@ export default function SipAccountsPanel({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
-                Username <span className="text-zinc-400">(optional — auto-generated if blank)</span>
+                Username <span className="text-zinc-400">(optional — shv_ + 8–32 lowercase letters/digits, auto-generated if blank)</span>
               </label>
               <input
                 type="text"

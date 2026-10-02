@@ -210,7 +210,9 @@ const USERNAME_PATTERN = /^shv_[a-z0-9]{8,32}$/;
 
 async function assertUsernameAvailable(username: string): Promise<string> {
   if (!USERNAME_PATTERN.test(username)) {
-    throw new Error('Invalid SIP username format');
+    throw new Error(
+      'Invalid SIP username format. Use the shv_ prefix followed by 8–32 lowercase letters or digits (e.g. shv_client01).'
+    );
   }
   const existing = await prisma.sipAccount.findUnique({ where: { username } });
   if (existing) {
