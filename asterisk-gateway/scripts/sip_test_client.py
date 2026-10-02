@@ -34,7 +34,21 @@ def md5(s):
     return hashlib.md5(s.encode()).hexdigest()
 
 
-def build(method, uri, auth_hdr=None, extra=""):
+SDP = (
+    "v=0\r\n"
+    "o=shvtest 0 0 IN IP4 82.152.141.69\r\n"
+    "s=shvtest\r\n"
+    "c=IN IP4 82.152.141.69\r\n"
+    "t=0 0\r\n"
+    "m=audio 40000 RTP/AVP 0 8 101\r\n"
+    "a=rtpmap:0 PCMU/8000\r\n"
+    "a=rtpmap:8 PCMA/8000\r\n"
+    "a=rtpmap:101 telephone-event/8000\r\n"
+    "a=sendrecv\r\n"
+)
+
+
+def build(method, uri, auth_hdr=None, extra="", sdp=False):
     global CSEQ
     CSEQ += 1
     msg = (
@@ -49,7 +63,11 @@ def build(method, uri, auth_hdr=None, extra=""):
     )
     if auth_hdr:
         msg += auth_hdr
-    msg += f"Content-Length: 0\r\n{extra}\r\n"
+    if sdp:
+        msg += "Content-Type: application/sdp\r\n"
+        msg += f"Content-Length: {len(SDP)}\r\n\r\n{SDP}"
+    else:
+        msg += f"Content-Length: 0\r\n{extra}\r\n"
     return msg
 
 
@@ -129,7 +147,7 @@ def do_register():
 
 def do_invite():
     uri = f"sip:{DEST}@82.152.141.69"
-    resp = transact(build("INVITE", uri), "INVITE")
+    resp = transact(build("INVITE", uri, sdp=True), "INVITE")
     if resp is None:
         print("INVITE_TIMEOUT")
         return
@@ -138,7 +156,7 @@ def do_invite():
         return
     header_name, params = parse_challenge(resp)
     auth = f"{header_name}: Digest {digest_auth('INVITE', uri, params)}\r\n"
-    resp = transact(build("INVITE", uri, auth), "INVITE+auth")
+    resp = transact(build("INVITE", uri, auth, sdp=True), "INVITE+auth")
     if resp:
         report_final(resp)
 
