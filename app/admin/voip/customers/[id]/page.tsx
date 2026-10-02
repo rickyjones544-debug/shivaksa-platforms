@@ -2,10 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
+import SipAccountsPanel from './SipAccountsPanel';
+import RateCardPanel from './RateCardPanel';
+import MembersPanel from './MembersPanel';
 
 interface CustomerDetail {
   id: string;
   name: string;
+  status?: string;
   service: {
     status: string;
     customerRate: string;
@@ -53,6 +58,9 @@ export default function VoipCustomerDetailPage() {
   const id = params.id as string;
   const [customer, setCustomer] = useState<CustomerDetail | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [kycStatus, setKycStatus] = useState<string | null>(null);
+  const [memberCount, setMemberCount] = useState(0);
+  const [activeMemberCount, setActiveMemberCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -61,12 +69,18 @@ export default function VoipCustomerDetailPage() {
     Promise.all([
       fetch(`/api/voip/admin/customers/${id}`, { credentials: 'include' }).then((r) => r.json()),
       fetch(`/api/voip/admin/customers/${id}/wallet/transactions?take=50`, { credentials: 'include' }).then((r) => r.json()),
+      fetch(`/api/admin/onboarding/${id}`, { credentials: 'include' }).then((r) => r.json()).catch(() => null),
+      fetch(`/api/admin/organizations/${id}/members`, { credentials: 'include' }).then((r) => r.json()).catch(() => null),
     ])
-      .then(([customerJson, txJson]) => {
+      .then(([customerJson, txJson, kycJson, membersJson]) => {
         if (!customerJson.success) throw new Error(customerJson.error);
         if (!txJson.success) throw new Error(txJson.error);
         setCustomer(customerJson.data);
         setTransactions(txJson.data || []);
+        setKycStatus(kycJson?.data?.status ?? null);
+        const members = membersJson?.success ? membersJson.data || [] : [];
+        setMemberCount(members.length);
+        setActiveMemberCount(members.filter((m: { status: string }) => m.status === 'ACTIVE').length);
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load'))
       .finally(() => setLoading(false));
@@ -187,6 +201,56 @@ export default function VoipCustomerDetailPage() {
           </div>
         )}
 
+        <section className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 space-y-4">
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Onboarding Checklist</h2>
+          <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+            <li className="flex items-center gap-2">
+              <span className="text-emerald-500">✓</span>
+              <span className="text-zinc-700 dark:text-zinc-300">Organization created <StatusBadge status={customer.status || 'ACTIVE'} /></span>
+            </li>
+            <li className="flex items-center gap-2">
+              <span className={memberCount > 0 ? 'text-emerald-500' : 'text-zinc-400'}>{memberCount > 0 ? '✓' : '○'}</span>
+              <span className="text-zinc-700 dark:text-zinc-300">Customer user{memberCount === 1 ? '' : 's'}: {memberCount} ({activeMemberCount} active)</span>
+            </li>
+            <li className="flex items-center gap-2">
+              <span className={kycStatus === 'APPROVED' ? 'text-emerald-500' : 'text-amber-500'}>{kycStatus === 'APPROVED' ? '✓' : '○'}</span>
+              <span className="text-zinc-700 dark:text-zinc-300">
+                KYC: {kycStatus || 'Not submitted'}{' '}
+                <Link href={`/admin/onboarding/${id}`} className="text-blue-600 dark:text-blue-400 text-xs hover:underline">
+                  review
+                </Link>
+              </span>
+            </li>
+            <li className="flex items-center gap-2">
+              <span className={customer.service ? 'text-emerald-500' : 'text-zinc-400'}>{customer.service ? '✓' : '○'}</span>
+              <span className="text-zinc-700 dark:text-zinc-300">VoIP service configured</span>
+            </li>
+            <li className="flex items-center gap-2">
+              <span className={parseFloat(customer.wallet?.available || '0') > 0 ? 'text-emerald-500' : 'text-amber-500'}>
+                {parseFloat(customer.wallet?.available || '0') > 0 ? '✓' : '○'}
+              </span>
+              <span className="text-zinc-700 dark:text-zinc-300">Wallet funded</span>
+            </li>
+          </ul>
+          {kycStatus !== 'APPROVED' && (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              VoIP provisioning is unavailable until the organization&apos;s existing eligibility requirements are satisfied (organization ACTIVE + KYC APPROVED).
+            </p>
+          )}
+
+          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 text-xs space-y-1">
+            <div className="font-medium text-zinc-700 dark:text-zinc-300 uppercase tracking-wide">Customer handoff</div>
+            <div className="text-zinc-600 dark:text-zinc-400">
+              Portal login: <span className="font-mono">https://app.shivaksatechnology.com/login</span> — customer logs in with the email and password set on their user above.
+            </div>
+            <div className="text-zinc-600 dark:text-zinc-400">
+              SIP device: server <span className="font-mono">82.152.141.69</span>, port <span className="font-mono">5060</span>, transport <span className="font-mono">UDP</span> — username/password from the SIP account below (password is shown once on creation/reset or via audited reveal).
+            </div>
+          </div>
+        </section>
+
+        <MembersPanel customerId={id} onError={setError} onMessage={setMessage} />
+
         <section className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Service Settings</h2>
@@ -255,6 +319,10 @@ export default function VoipCustomerDetailPage() {
             </button>
           </div>
         </section>
+
+        <SipAccountsPanel customerId={id} onError={setError} onMessage={setMessage} />
+
+        <RateCardPanel customerId={id} onError={setError} onMessage={setMessage} />
 
         <section className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 space-y-4">
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Wallet</h2>

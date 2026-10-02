@@ -8,8 +8,18 @@ export function toAdminSipAccountDto(account: {
   status: string;
   callerId: string | null;
   maxConcurrentCalls: number;
+  transport?: string;
   providerConnectionId: string | null;
   providerConfig: unknown | null;
+  provisioningState?: string;
+  provisioningError?: string | null;
+  provisionedAt?: Date | null;
+  asteriskEndpoint?: string | null;
+  registrationStatus?: string;
+  lastRegisteredAt?: Date | null;
+  lastContactAddress?: string | null;
+  registrationUserAgent?: string | null;
+  registrationObservedAt?: Date | null;
   phoneNumbers?: { number: string }[];
   createdAt: Date;
   updatedAt: Date;
@@ -21,7 +31,17 @@ export function toAdminSipAccountDto(account: {
     status: account.status,
     callerId: account.callerId,
     maxConcurrentCalls: account.maxConcurrentCalls,
+    transport: account.transport || 'UDP',
     providerConnectionId: account.providerConnectionId,
+    provisioningState: account.provisioningState || 'PENDING',
+    provisioningError: account.provisioningError || null,
+    provisionedAt: account.provisionedAt?.toISOString() || null,
+    asteriskEndpoint: account.asteriskEndpoint || null,
+    registrationStatus: account.registrationStatus || 'UNKNOWN',
+    lastRegisteredAt: account.lastRegisteredAt?.toISOString() || null,
+    lastContactAddress: account.lastContactAddress || null,
+    registrationUserAgent: account.registrationUserAgent || null,
+    registrationObservedAt: account.registrationObservedAt?.toISOString() || null,
     numbers: account.phoneNumbers?.map((n) => n.number) || [],
     createdAt: account.createdAt.toISOString(),
     updatedAt: account.updatedAt.toISOString(),
@@ -143,5 +163,59 @@ export function toAdminServiceDto(service: {
     lowBalanceThresholds: service.lowBalanceThresholds,
     createdAt: service.createdAt.toISOString(),
     updatedAt: service.updatedAt.toISOString(),
+  };
+}
+
+export function toAdminRateCardDto(card: {
+  id: string;
+  organizationId: string;
+  name: string;
+  description: string | null;
+  currency: string;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return {
+    id: card.id,
+    organizationId: card.organizationId,
+    name: card.name,
+    description: card.description,
+    currency: card.currency,
+    status: card.status,
+    createdAt: card.createdAt.toISOString(),
+    updatedAt: card.updatedAt.toISOString(),
+  };
+}
+
+export function toAdminCustomerRateDto(rate: {
+  id: string;
+  rateCardId: string;
+  prefix: string;
+  destination: string | null;
+  country: string | null;
+  rate: Prisma.Decimal;
+  billingIncrementSeconds: number;
+  minimumBillableSeconds: number;
+  effectiveFrom: Date;
+  effectiveTo: Date | null;
+  enabled: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return {
+    id: rate.id,
+    rateCardId: rate.rateCardId,
+    prefix: rate.prefix,
+    destination: rate.destination,
+    country: rate.country,
+    rate: rate.rate.toString(),
+    billingIncrementSeconds: rate.billingIncrementSeconds,
+    minimumBillableSeconds: rate.minimumBillableSeconds,
+    effectiveFrom: rate.effectiveFrom.toISOString(),
+    effectiveTo: rate.effectiveTo?.toISOString() || null,
+    enabled: rate.enabled,
+    createdAt: rate.createdAt.toISOString(),
+    updatedAt: rate.updatedAt.toISOString(),
   };
 }

@@ -11,6 +11,7 @@ import {
   toDecimal,
 } from './billing';
 import { consumeReservation, releaseReservation, addDebit } from './wallet';
+import { applyUsageDelta, periodStartFor } from './usage';
 import { getOrCreateVoipService } from './customers';
 import { audit } from './audit';
 import { assertVoipEligibility } from './eligibility';
@@ -254,6 +255,9 @@ export async function reconcileCallBilling(
     reservationId: string | null;
     durationSeconds: number | null;
     customerRate: Prisma.Decimal;
+    billingIncrementSeconds?: number | null;
+    minimumBillableSeconds?: number | null;
+    endTime?: Date | null;
     wholesaleRate?: Prisma.Decimal | null;
     carrierRate?: { rate: Prisma.Decimal; billingIncrementSeconds: number; minimumBillableSeconds: number } | null;
   },
@@ -262,10 +266,20 @@ export async function reconcileCallBilling(
   const service = await getOrCreateVoipService(call.organizationId);
 
   const duration = call.durationSeconds ?? 0;
-  const customerBillingIncrement = service.billingIncrementSeconds;
-  const customerMinimumDuration = service.minimumBillableSeconds;
+  // Prefer the pricing snapshot captured at authorization time; calls created
+  // before Phase 3 fall back to the current service configuration.
+  const customerBillingIncrement =
+    call.billingIncrementSeconds ?? service.billingIncrementSeconds;
+  const customerMinimumDuration =
+    call.minimumBillableSeconds ?? service.minimumBillableSeconds;
 
-  const billableSeconds = calculateBillableSeconds(duration, customerBillingIncrement, customerMinimumDuration);
+  // Only calls that actually connected bill the customer. FAILED/BUSY/
+  // NO_ANSWER/CANCELLED must not inherit the configured minimum billable
+  // duration — there is no talk time to charge for.
+  const answered = call.status === CallStatus.COMPLETED;
+  const billableSeconds = answered
+    ? calculateBillableSeconds(duration, customerBillingIncrement, customerMinimumDuration)
+    : 0;
   const billedMinutes = toDecimal(billableSeconds).dividedBy(60).toDecimalPlaces(4);
   const customerCharge = calculateCustomerCharge(billableSeconds, call.customerRate);
 
@@ -275,8 +289,9 @@ export async function reconcileCallBilling(
   let wholesaleRate: Prisma.Decimal | null = null;
 
   if (event?.wholesaleCost !== undefined) {
+    // Provider-reported cost is authoritative, including for failed calls.
     wholesaleCost = event.wholesaleCost;
-  } else {
+  } else if (answered) {
     const effectiveWholesaleRate =
       call.wholesaleRate ?? (call.carrierRate ? call.carrierRate.rate : null);
     if (effectiveWholesaleRate) {
@@ -296,8 +311,12 @@ export async function reconcileCallBilling(
 
   let walletUpdate = null;
   if (call.reservationId && call.direction === 'OUTBOUND') {
-    walletUpdate = await consumeReservation(call.reservationId, customerCharge);
-  } else if (call.direction === 'OUTBOUND') {
+    // A zero-charge call releases the reservation back to the wallet rather
+    // than consuming it.
+    walletUpdate = customerCharge.isZero()
+      ? await releaseReservation(call.reservationId)
+      : await consumeReservation(call.reservationId, customerCharge);
+  } else if (call.direction === 'OUTBOUND' && customerCharge.greaterThan(0)) {
     walletUpdate = await addDebit(
       call.organizationId,
       customerCharge,
@@ -307,27 +326,47 @@ export async function reconcileCallBilling(
     );
   }
 
-  await prisma.voipCall.update({
-    where: { id: call.id },
-    data: {
-      billableSeconds,
-      billedMinutes,
-      customerCharge,
-      wholesaleRate,
-      wholesaleCost,
-      grossProfit,
-      billingProcessed: true,
-    },
+  // Atomically claim billingProcessed: if a duplicate webhook/gateway event
+  // races in, only one reconcile wins — the loser leaves usage untouched.
+  const reconciled = await prisma.$transaction(async (tx) => {
+    const claimed = await tx.voipCall.updateMany({
+      where: { id: call.id, billingProcessed: false },
+      data: {
+        billableSeconds,
+        billedMinutes,
+        customerCharge,
+        wholesaleRate,
+        wholesaleCost,
+        grossProfit,
+        billingProcessed: true,
+      },
+    });
+    if (claimed.count === 0) return false; // already reconciled — do not double-count usage
+
+    await applyUsageDelta(
+      tx,
+      call.organizationId,
+      periodStartFor(call.endTime ?? new Date()),
+      {
+        answered,
+        durationSeconds: duration,
+        billableSeconds,
+        customerCharge,
+      }
+    );
+    return true;
   });
 
-  await audit(null, call.status === CallStatus.COMPLETED ? 'CALL_COMPLETED' : 'CALL_FAILED', 'VoipCall', call.id, {
-    duration,
-    billableSeconds,
-    customerCharge: customerCharge.toString(),
-    wholesaleRate: wholesaleRate?.toString(),
-    wholesaleCost: wholesaleCost?.toString(),
-    grossProfit: grossProfit?.toString(),
-  });
+  if (reconciled) {
+    await audit(null, call.status === CallStatus.COMPLETED ? 'CALL_COMPLETED' : 'CALL_FAILED', 'VoipCall', call.id, {
+      duration,
+      billableSeconds,
+      customerCharge: customerCharge.toString(),
+      wholesaleRate: wholesaleRate?.toString(),
+      wholesaleCost: wholesaleCost?.toString(),
+      grossProfit: grossProfit?.toString(),
+    });
+  }
 
   return walletUpdate;
 }

@@ -19,6 +19,23 @@ export interface UpdatePhoneNumberInput {
   sipAccountId?: string | null;
 }
 
+// Inbound call routing matches numbers globally, so an ACTIVE number must be
+// unique across all organizations — not just within one. Enforced at the
+// application layer because existing rows may share a number while INACTIVE.
+async function assertNoActiveNumberConflict(number: string, excludeId?: string) {
+  const conflict = await prisma.phoneNumber.findFirst({
+    where: {
+      number,
+      status: PhoneNumberStatus.ACTIVE,
+      ...(excludeId ? { id: { not: excludeId } } : {}),
+    },
+    select: { id: true },
+  });
+  if (conflict) {
+    throw new Error('This number is already active on another account');
+  }
+}
+
 export async function createPhoneNumber(
   ctx: AuthenticatedContext | null,
   organizationId: string,
@@ -26,6 +43,8 @@ export async function createPhoneNumber(
 ) {
   const normalized = input.number.trim();
   const provider = input.provider || 'telnyx';
+
+  await assertNoActiveNumberConflict(normalized);
 
   const account = input.sipAccountId
     ? await prisma.sipAccount.findFirst({
@@ -96,7 +115,12 @@ export async function updatePhoneNumber(
 
   const data: Prisma.PhoneNumberUncheckedUpdateInput = {};
   if (input.displayNumber !== undefined) data.displayNumber = input.displayNumber?.trim() || phoneNumber.number;
-  if (input.status) data.status = input.status;
+  if (input.status) {
+    if (input.status === PhoneNumberStatus.ACTIVE && phoneNumber.status !== PhoneNumberStatus.ACTIVE) {
+      await assertNoActiveNumberConflict(phoneNumber.number, phoneNumber.id);
+    }
+    data.status = input.status;
+  }
   if (input.sipAccountId !== undefined) data.sipAccountId = input.sipAccountId || null;
 
   const updated = await prisma.phoneNumber.update({

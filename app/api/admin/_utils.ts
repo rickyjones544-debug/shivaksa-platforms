@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser, type AuthenticatedContext } from '@/lib/auth/auth';
-import { hasPermission } from '@/lib/rbac/authorization';
+import { hasPermission, isPlatformOperator } from '@/lib/rbac/authorization';
 
 export async function withAdminAuth<T>(
   request: NextRequest,
@@ -8,6 +8,14 @@ export async function withAdminAuth<T>(
     scope: string;
     action: string;
     resource?: string;
+    /**
+     * When true, only platform operators (SUPER_ADMIN or roles holding
+     * platform-level 'admin:*' permissions) may call this endpoint.
+     * Client/org admins are rejected even for their own organization.
+     * Required for cross-tenant administration such as creating or
+     * suspending organizations.
+     */
+    platformOnly?: boolean;
     handler: (ctx: AuthenticatedContext) => Promise<T>;
   }
 ): Promise<NextResponse> {
@@ -21,6 +29,13 @@ export async function withAdminAuth<T>(
     }
 
     if (!hasPermission(ctx, options.scope, options.action, options.resource)) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden' },
+        { status: 403 }
+      );
+    }
+
+    if (options.platformOnly && !isPlatformOperator(ctx)) {
       return NextResponse.json(
         { success: false, error: 'Forbidden' },
         { status: 403 }

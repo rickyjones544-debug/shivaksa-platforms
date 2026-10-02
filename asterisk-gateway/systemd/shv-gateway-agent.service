@@ -1,0 +1,16 @@
+[Unit]
+Description=Shivaksa Asterisk gateway provisioning agent
+After=network.target asterisk.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/bin/shv_gateway_agent.py
+Restart=always
+RestartSec=5
+User=root
+# The agent only writes /etc/asterisk/pjsip_customer_platform.conf and
+# /var/lib/shivaksa-gateway/ and runs `asterisk -rx` reloads.
+NoNewPrivileges=false
+
+[Install]
+WantedBy=multi-user.target

@@ -2,20 +2,39 @@ import { Prisma } from '@prisma/client';
 
 export type CustomerServiceStatus = 'ACTIVE' | 'LOW_BALANCE' | 'ZERO_BALANCE' | 'SUSPENDED';
 
+export const CUSTOMER_SIP_SERVER = process.env.SIP_SERVER_HOST || '82.152.141.69';
+export const CUSTOMER_SIP_PORT = Number(process.env.SIP_SERVER_PORT || 5060);
+
 export function toCustomerSipAccountDto(account: {
   id: string;
   username: string;
   domain: string;
   status: string;
   callerId: string | null;
+  maxConcurrentCalls?: number;
+  transport?: string;
+  provisioningState?: string;
+  registrationStatus?: string;
+  lastRegisteredAt?: Date | null;
+  registrationObservedAt?: Date | null;
   phoneNumbers?: { number: string }[];
 }) {
   return {
     id: account.id,
     username: account.username,
     domain: account.domain,
+    // Customer-facing connection details. Provider-independent: the customer
+    // always points at the Shivaksa gateway, never at an upstream carrier.
+    server: CUSTOMER_SIP_SERVER,
+    port: CUSTOMER_SIP_PORT,
+    transport: account.transport || 'UDP',
     status: account.status,
     callerId: account.callerId,
+    maxConcurrentCalls: account.maxConcurrentCalls ?? 1,
+    provisioningState: account.provisioningState || 'PENDING',
+    registrationStatus: account.registrationStatus || 'UNKNOWN',
+    lastRegisteredAt: account.lastRegisteredAt?.toISOString() || null,
+    registrationObservedAt: account.registrationObservedAt?.toISOString() || null,
     numbers: account.phoneNumbers?.map((n) => n.number) || [],
   };
 }
@@ -108,6 +127,7 @@ export function toCustomerServiceDto(service: {
   customerRate: Prisma.Decimal;
   reserveMinutes: number;
   maxCallDurationMinutes: number;
+  lowBalanceThresholds?: number[];
 }) {
   const effectiveStatus: CustomerServiceStatus = service.isAdminSuspended
     ? 'SUSPENDED'
@@ -118,5 +138,70 @@ export function toCustomerServiceDto(service: {
     customerRate: service.customerRate.toString(),
     reserveMinutes: service.reserveMinutes,
     maxCallDurationMinutes: service.maxCallDurationMinutes,
+    lowBalanceThresholds: service.lowBalanceThresholds || [],
+  };
+}
+
+/**
+ * Customer-facing selling rate. Deliberately excludes everything from the
+ * carrier/wholesale layer — no carrier id, cost, margin or routing data.
+ */
+export function toCustomerRateDto(rate: {
+  id: string;
+  prefix: string;
+  destination: string | null;
+  country: string | null;
+  rate: Prisma.Decimal;
+  billingIncrementSeconds: number;
+  minimumBillableSeconds: number;
+  effectiveFrom: Date;
+  effectiveTo: Date | null;
+  enabled: boolean;
+}) {
+  return {
+    id: rate.id,
+    prefix: `+${rate.prefix}`,
+    destination: rate.destination,
+    country: rate.country,
+    ratePerMinute: rate.rate.toString(),
+    billingIncrementSeconds: rate.billingIncrementSeconds,
+    minimumBillableSeconds: rate.minimumBillableSeconds,
+    effectiveFrom: rate.effectiveFrom.toISOString(),
+    effectiveTo: rate.effectiveTo?.toISOString() || null,
+    enabled: rate.enabled,
+  };
+}
+
+export function toCustomerRateCardDto(card: {
+  id: string;
+  name: string;
+  currency: string;
+  status: string;
+}) {
+  return {
+    id: card.id,
+    name: card.name,
+    currency: card.currency,
+    status: card.status,
+  };
+}
+
+export function toCustomerUsageDto(usage: {
+  periodStart: Date;
+  totalCalls: number;
+  answeredCalls: number;
+  failedCalls: number;
+  durationSeconds: number;
+  billableSeconds: number;
+  customerSpend: Prisma.Decimal;
+}) {
+  return {
+    periodStart: usage.periodStart.toISOString(),
+    totalCalls: usage.totalCalls,
+    answeredCalls: usage.answeredCalls,
+    failedCalls: usage.failedCalls,
+    durationSeconds: usage.durationSeconds,
+    billableSeconds: usage.billableSeconds,
+    totalSpend: usage.customerSpend.toString(),
   };
 }

@@ -3,12 +3,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { CallStatus } from '@/lib/voip/constants';
 import { reconcileCallBilling } from '@/lib/voip/services/calls';
-
-function getGatewayApiKey(): string {
-  const key = process.env.GATEWAY_API_KEY;
-  if (!key) throw new Error('GATEWAY_API_KEY is not configured');
-  return key;
-}
+import { isAuthorizedGatewayRequest, gatewayUnauthorized } from '@/lib/voip/gateway-auth';
 
 const FINAL_STATUSES: readonly string[] = [
   CallStatus.COMPLETED,
@@ -44,14 +39,13 @@ function mapEventToStatus(eventType: string): string | null {
 /**
  * Internal gateway events endpoint.
  *
- * Receives call state events from the Asterisk ARI event relay (Phase 3).
- * Phase 2B: the contract and authentication are in place; events can be
- * injected by tests to validate billing/CDR reconciliation.
+ * Receives call lifecycle events from the Asterisk gateway agent / dialplan
+ * hangup handler. Final events reconcile billing via reconcileCallBilling;
+ * duplicate finals are safe (billingProcessed gate).
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  const apiKey = request.headers.get('x-gateway-api-key');
-  if (apiKey !== getGatewayApiKey()) {
-    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+  if (!isAuthorizedGatewayRequest(request)) {
+    return gatewayUnauthorized();
   }
 
   const body = await request.json().catch(() => ({}));
@@ -140,6 +134,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         reservationId: updated.reservationId,
         durationSeconds: updated.durationSeconds,
         customerRate: updated.customerRate,
+        billingIncrementSeconds: updated.billingIncrementSeconds,
+        minimumBillableSeconds: updated.minimumBillableSeconds,
+        endTime: updated.endTime,
         carrierRate: call.carrierRate,
       },
       undefined

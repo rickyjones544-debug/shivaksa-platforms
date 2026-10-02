@@ -201,13 +201,59 @@ describe('Internal gateway hangup endpoint', () => {
   });
 
   it('rejects cross-tenant hangup attempts', async () => {
-    const call = makeCallRecord();
+    // findFirst is scoped by organizationId, so a call owned by org-1 is not
+    // found for org-2 — the route returns 404 rather than leaking existence.
     (prisma as any).voipCall = {
-      findFirst: vi.fn().mockResolvedValue(call),
+      findFirst: vi.fn().mockResolvedValue(null),
     };
 
     const req = makeHangupRequest('gw-1', { organizationId: 'org-2' }, 'gateway-secret');
     const res = await handleHangup(req, { params: Promise.resolve({ id: 'gw-1' }) });
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
+  });
+
+  it('queues a hangup task for an active call with a stored channel', async () => {
+    const call = makeCallRecord({
+      status: 'ANSWERED',
+      routingInfo: { asteriskChannel: 'PJSIP/shv_abc-00000001' },
+    });
+    (prisma as any).voipCall = {
+      findFirst: vi.fn().mockResolvedValue(call),
+    };
+    (prisma as any).provisioningTask = {
+      create: vi.fn().mockResolvedValue({ id: 'task-1' }),
+    };
+
+    const req = makeHangupRequest('gw-1', {}, 'gateway-secret');
+    const res = await handleHangup(req, { params: Promise.resolve({ id: 'gw-1' }) });
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.data.requested).toBe(true);
+    expect((prisma as any).provisioningTask.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: 'HANGUP_CALL',
+          callId: 'call-1',
+          payload: { channel: 'PJSIP/shv_abc-00000001' },
+        }),
+      })
+    );
+  });
+
+  it('does not queue a hangup task for a finished call', async () => {
+    const call = makeCallRecord({ status: 'COMPLETED', billingProcessed: true });
+    (prisma as any).voipCall = {
+      findFirst: vi.fn().mockResolvedValue(call),
+    };
+    (prisma as any).provisioningTask = { create: vi.fn() };
+
+    const req = makeHangupRequest('gw-1', {}, 'gateway-secret');
+    const res = await handleHangup(req, { params: Promise.resolve({ id: 'gw-1' }) });
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.data.requested).toBe(false);
+    expect((prisma as any).provisioningTask.create).not.toHaveBeenCalled();
   });
 });

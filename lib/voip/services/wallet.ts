@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
-import { TransactionType, ReservationStatus } from '@/lib/voip/constants';
+import { TransactionType, ReservationStatus, CallStatus, WALLET_RESERVATION_TTL_MS } from '@/lib/voip/constants';
 import { toDecimal, getReserveAmount } from './billing';
 import { recomputeServiceStatus } from './customers';
 import type { AuthenticatedContext } from '@/lib/rbac/authorization';
@@ -290,6 +290,7 @@ export async function reserveForCall(
         callId,
         amount: reservationAmount,
         status: ReservationStatus.ACTIVE,
+        expiresAt: new Date(Date.now() + WALLET_RESERVATION_TTL_MS),
       },
     });
 
@@ -402,6 +403,51 @@ export async function consumeReservation(
 
     return { wallet: updatedWallet, reservation: updatedReservation };
   });
+}
+
+const IN_PROGRESS_CALL_STATUSES: readonly string[] = [
+  CallStatus.INITIATED,
+  CallStatus.RINGING,
+  CallStatus.ANSWERED,
+];
+
+/**
+ * Release wallet reservations whose calls never reached a final state.
+ *
+ * A reservation is releasable when it is past its expiresAt (or was created
+ * before expiry tracking existed) AND its call is finished or missing. If the
+ * associated call is still in progress the reservation is extended instead,
+ * so an active call can never lose its held funds. Release itself is
+ * idempotent: only ACTIVE reservations transition, and a CONSUMED reservation
+ * is never touched.
+ */
+export async function sweepExpiredReservations(now = new Date()) {
+  const candidates = await prisma.walletReservation.findMany({
+    where: {
+      status: ReservationStatus.ACTIVE,
+      OR: [{ expiresAt: { lt: now } }, { expiresAt: null }],
+    },
+    include: { call: { select: { id: true, status: true } } },
+  });
+
+  let released = 0;
+  let extended = 0;
+
+  for (const reservation of candidates) {
+    if (reservation.call && IN_PROGRESS_CALL_STATUSES.includes(reservation.call.status)) {
+      await prisma.walletReservation.update({
+        where: { id: reservation.id },
+        data: { expiresAt: new Date(now.getTime() + WALLET_RESERVATION_TTL_MS) },
+      });
+      extended += 1;
+      continue;
+    }
+
+    const result = await releaseReservation(reservation.id);
+    if (result) released += 1;
+  }
+
+  return { released, extended, inspected: candidates.length };
 }
 
 export async function getAvailableBalance(organizationId: string): Promise<Prisma.Decimal> {

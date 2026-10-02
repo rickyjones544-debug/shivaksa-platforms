@@ -47,8 +47,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     action: 'write',
     resource: 'sip',
     handler: async (ctx) => {
-      const account = await resetSipPassword(ctx, ctx.organization!.id, id);
-      return toCustomerSipAccountDto(account);
+      // Returns the account DTO plus the newly generated password exactly once.
+      // Resetting invalidates the previous credential.
+      return resetSipPassword(ctx, ctx.organization!.id, id);
     },
   });
 }

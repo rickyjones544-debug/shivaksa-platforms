@@ -15,6 +15,12 @@ interface SipAccount {
   domain: string;
   status: string;
   callerId: string | null;
+  server: string;
+  port: number;
+  transport: string;
+  registrationStatus: string;
+  provisioningState: string;
+  maxConcurrentCalls: number;
   numbers: string[];
 }
 
@@ -35,12 +41,36 @@ interface Service {
   customerRate: string;
   reserveMinutes: number;
   maxCallDurationMinutes: number;
+  lowBalanceThresholds: number[];
+}
+
+interface UsageSummary {
+  periodStart: string;
+  usage: {
+    totalCalls: number;
+    answeredCalls: number;
+    failedCalls: number;
+    durationSeconds: number;
+    billableSeconds: number;
+    totalSpend: string;
+  } | null;
+  activeCalls: number;
+  maxConcurrentCalls: number;
 }
 
 function formatCurrency(value: string, digits = 2) {
   const n = parseFloat(value);
   if (Number.isNaN(n)) return '$0.00';
   return `$${n.toFixed(digits)}`;
+}
+
+function formatDuration(seconds: number) {
+  if (seconds >= 60) {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}m ${s}s`;
+  }
+  return `${seconds}s`;
 }
 
 function estimatedMinutes(available: string, rate: string) {
@@ -72,22 +102,35 @@ function statusMessage(status: string) {
   }
 }
 
+function registrationBadge(status: string) {
+  switch (status) {
+    case 'REGISTERED':
+      return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20';
+    case 'UNREGISTERED':
+      return 'bg-zinc-500/10 text-zinc-600 dark:text-zinc-400 border-zinc-500/20';
+    default:
+      return 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20';
+  }
+}
+
 export default function VoipDashboardPage() {
   const [service, setService] = useState<Service | null>(null);
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [accounts, setAccounts] = useState<SipAccount[]>([]);
   const [calls, setCalls] = useState<Call[]>([]);
+  const [usage, setUsage] = useState<UsageSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
       try {
-        const [serviceRes, walletRes, sipRes, callsRes] = await Promise.all([
+        const [serviceRes, walletRes, sipRes, callsRes, usageRes] = await Promise.all([
           fetch('/api/voip/service', { credentials: 'include' }),
           fetch('/api/voip/wallet', { credentials: 'include' }),
           fetch('/api/voip/sip', { credentials: 'include' }),
           fetch('/api/voip/calls?take=5', { credentials: 'include' }),
+          fetch('/api/voip/usage', { credentials: 'include' }),
         ]);
 
         const results = await Promise.all([
@@ -95,17 +138,20 @@ export default function VoipDashboardPage() {
           walletRes.json(),
           sipRes.json(),
           callsRes.json(),
+          usageRes.json(),
         ]);
 
         if (!serviceRes.ok) throw new Error(results[0].error || 'Failed to load service');
         if (!walletRes.ok) throw new Error(results[1].error || 'Failed to load wallet');
         if (!sipRes.ok) throw new Error(results[2].error || 'Failed to load SIP accounts');
         if (!callsRes.ok) throw new Error(results[3].error || 'Failed to load calls');
+        if (!usageRes.ok) throw new Error(results[4].error || 'Failed to load usage');
 
         setService(results[0].data);
         setWallet(results[1].data);
         setAccounts(results[2].data || []);
         setCalls(results[3].data || []);
+        setUsage(results[4].data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred');
       } finally {
@@ -120,8 +166,8 @@ export default function VoipDashboardPage() {
       <div className="p-6 sm:p-8">
         <div className="max-w-7xl mx-auto space-y-6">
           <div className="h-8 w-48 rounded bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[...Array(3)].map((_, i) => (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
               <div key={i} className="h-28 rounded-2xl bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
             ))}
           </div>
@@ -144,6 +190,14 @@ export default function VoipDashboardPage() {
   }
 
   const status = service ? statusMessage(service.status) : null;
+  const lowThreshold = service?.lowBalanceThresholds?.length
+    ? Math.max(...service.lowBalanceThresholds)
+    : null;
+  const isLowBalance =
+    wallet && lowThreshold !== null && parseFloat(wallet.available) < lowThreshold;
+  const periodLabel = usage
+    ? new Date(usage.periodStart).toLocaleString('default', { month: 'long', year: 'numeric' })
+    : '';
 
   return (
     <div className="p-6 sm:p-8">
@@ -154,41 +208,64 @@ export default function VoipDashboardPage() {
               VoIP Dashboard
             </h1>
             <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-              Monitor service status, SIP accounts, recent calls and usage.
+              Monitor balance, SIP registration, usage and recent calls.
             </p>
           </div>
-          <a
-            href="/voip/cdr"
-            className="inline-flex items-center justify-center px-5 py-2.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
-          >
-            View call records
-          </a>
+          <div className="flex gap-3">
+            <a
+              href="/voip/rates"
+              className="inline-flex items-center justify-center px-5 py-2.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+            >
+              View rates
+            </a>
+            <a
+              href="/voip/cdr"
+              className="inline-flex items-center justify-center px-5 py-2.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+            >
+              View call records
+            </a>
+          </div>
         </div>
 
-        {status && (
-          <div className={`rounded-2xl border p-4 ${status.color}`}>
-            {status.text}
+        {(status || isLowBalance) && (
+          <div className={`rounded-2xl border p-4 ${status?.color || 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900'}`}>
+            {status ? status.text : 'Your balance is low. Add funds soon to avoid service interruption.'}
           </div>
         )}
 
         {service && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm">
               <div className="text-sm text-zinc-500 dark:text-zinc-400">Prepaid Available</div>
               <div className="text-3xl font-semibold mt-1">{wallet ? formatCurrency(wallet.available) : '$0.00'}</div>
-              <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Total: {wallet ? formatCurrency(wallet.balance) : '$0.00'}</div>
+              <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                Balance {wallet ? formatCurrency(wallet.balance) : '$0.00'} · Reserved {wallet ? formatCurrency(wallet.reserved) : '$0.00'}
+              </div>
             </div>
             <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm">
               <div className="text-sm text-zinc-500 dark:text-zinc-400">Estimated Minutes</div>
               <div className="text-3xl font-semibold mt-1">
                 {wallet && service ? estimatedMinutes(wallet.available, service.customerRate) : '0'}
               </div>
-              <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Based on current rate</div>
+              <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">At your standard rate · see rates page for per-destination pricing</div>
             </div>
             <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm">
-              <div className="text-sm text-zinc-500 dark:text-zinc-400">Customer Rate</div>
-              <div className="text-3xl font-semibold mt-1">{formatCurrency(service?.customerRate || '0', 4)}/min</div>
-              <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Prepaid per minute</div>
+              <div className="text-sm text-zinc-500 dark:text-zinc-400">Usage — {periodLabel}</div>
+              <div className="text-3xl font-semibold mt-1">
+                {usage?.usage ? formatCurrency(usage.usage.totalSpend) : '$0.00'}
+              </div>
+              <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                {usage?.usage
+                  ? `${usage.usage.totalCalls} calls · ${formatDuration(usage.usage.billableSeconds)} billable`
+                  : 'No usage this period'}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm">
+              <div className="text-sm text-zinc-500 dark:text-zinc-400">Active Calls</div>
+              <div className="text-3xl font-semibold mt-1">
+                {usage ? `${usage.activeCalls} / ${usage.maxConcurrentCalls}` : '0 / 0'}
+              </div>
+              <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Concurrent call usage</div>
             </div>
           </div>
         )}
@@ -204,18 +281,24 @@ export default function VoipDashboardPage() {
                   key={account.id}
                   className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 hover:border-blue-300 dark:hover:border-blue-800 transition"
                 >
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-sm">
                     <div>
                       <span className="text-zinc-500 dark:text-zinc-400">Username:</span>{' '}
                       <span className="font-medium">{account.username}</span>
                     </div>
                     <div>
-                      <span className="text-zinc-500 dark:text-zinc-400">Domain:</span>{' '}
-                      <span className="font-medium">{account.domain}</span>
+                      <span className="text-zinc-500 dark:text-zinc-400">Server:</span>{' '}
+                      <span className="font-medium">{account.server}:{account.port}/{account.transport}</span>
                     </div>
                     <div>
                       <span className="text-zinc-500 dark:text-zinc-400">Status:</span>{' '}
                       <span className="font-medium">{account.status}</span>
+                    </div>
+                    <div>
+                      <span className="text-zinc-500 dark:text-zinc-400">Registration:</span>{' '}
+                      <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${registrationBadge(account.registrationStatus)}`}>
+                        {account.registrationStatus}
+                      </span>
                     </div>
                     <div>
                       <span className="text-zinc-500 dark:text-zinc-400">Caller ID:</span>{' '}
@@ -226,6 +309,9 @@ export default function VoipDashboardPage() {
               ))}
             </div>
           )}
+          <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+            Configure your device in the SIP Accounts section — you connect to Shivaksa only; upstream carriers are managed for you.
+          </p>
         </section>
 
         <section className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm">
@@ -255,7 +341,7 @@ export default function VoipDashboardPage() {
                         </span>
                       </td>
                       <td className="py-3">{call.durationSeconds ?? 0}s</td>
-                      <td className="py-3 pr-6 text-right">{call.customerCharge ? formatCurrency(call.customerCharge) : '—'}</td>
+                      <td className="py-3 pr-6 text-right">{call.customerCharge ? formatCurrency(call.customerCharge, 4) : '—'}</td>
                     </tr>
                   ))}
                 </tbody>

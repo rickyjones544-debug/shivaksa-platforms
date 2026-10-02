@@ -284,6 +284,10 @@ model Organization {
   carriers             Carrier[]
   carrierRoutePolicies CarrierRoutePolicy[]
 
+  // Customer commercial layer (Phase 3)
+  customerRateCards CustomerRateCard[]
+  usageAggregates   UsageAggregate[]
+
   // Provider CRM relations
   providers            Provider[]
   onboardingLinks      OnboardingLink[]
@@ -646,28 +650,71 @@ model WalletReservation {
 model SipAccount {
   id                   String   @id @default(dbgenerated("gen_random_uuid()"))
   organizationId       String   @map("organization_id")
-  username             String
+  // Globally unique: Asterisk identifies endpoints by username, so a username
+  // must be unique across the entire platform, not just within an org.
+  username             String   @unique
   passwordCipher       String   @map("password_cipher")
   passwordTag          String   @map("password_tag")
   passwordIv           String   @map("password_iv")
   domain               String
   status               String   @default("ACTIVE") // ACTIVE, DISABLED
   maxConcurrentCalls   Int      @default(1) @map("max_concurrent_calls")
+  transport            String   @default("UDP") // UDP, TCP, TLS (customer-facing listener transport)
   callerId             String?  @map("caller_id")
   providerConnectionId String?  @map("provider_connection_id")
   providerConfig       Json?    @map("provider_config")
+  // Asterisk gateway provisioning state (PENDING, PROVISIONED, FAILED)
+  provisioningState    String   @default("PENDING") @map("provisioning_state")
+  provisioningError    String?  @map("provisioning_error")
+  provisionedAt        DateTime? @map("provisioned_at")
+  asteriskEndpoint     String?  @map("asterisk_endpoint") // endpoint name on the gateway (= username)
+  // Last known registration state as reported by the Asterisk gateway agent.
+  // This is observability only — never treated as the credential itself.
+  registrationStatus   String   @default("UNKNOWN") @map("registration_status") // REGISTERED, UNREGISTERED, UNKNOWN
+  lastRegisteredAt     DateTime? @map("last_registered_at")
+  lastContactAddress   String?  @map("last_contact_address") // IP:port, admin-facing only
+  registrationUserAgent String? @map("registration_user_agent")
+  registrationObservedAt DateTime? @map("registration_observed_at")
   createdAt            DateTime @default(now()) @map("created_at")
   updatedAt            DateTime @updatedAt @map("updated_at")
 
   organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   calls        VoipCall[]
   phoneNumbers PhoneNumber[]
+  provisioningTasks ProvisioningTask[]
 
   @@unique([organizationId, username])
   @@index([organizationId])
   @@index([status])
   @@index([providerConnectionId])
+  @@index([provisioningState])
+  @@index([registrationStatus])
   @@map("sip_accounts")
+}
+
+// Work queue between the platform and the on-VPS Asterisk gateway agent.
+// The agent polls for PENDING tasks, applies them, and reports results —
+// the platform never SSHes into the gateway.
+model ProvisioningTask {
+  id           String    @id @default(dbgenerated("gen_random_uuid()"))
+  action       String // UPSERT_ENDPOINT, DISABLE_ENDPOINT, HANGUP_CALL
+  status       String    @default("PENDING") // PENDING, PROCESSING, DONE, FAILED
+  sipAccountId String?   @map("sip_account_id")
+  callId       String?   @map("call_id")
+  // Task parameters. Never contains the SIP plaintext password — endpoint auth
+  // is delivered as an md5 digest (auth_type=md5) instead.
+  payload      Json
+  attempts     Int       @default(0)
+  lastError    String?   @map("last_error")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  processedAt  DateTime? @map("processed_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  sipAccount SipAccount? @relation(fields: [sipAccountId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([sipAccountId])
+  @@map("provisioning_tasks")
 }
 
 model PhoneNumber {
@@ -721,6 +768,9 @@ model Carrier {
   minimumBillableSeconds  Int             @default(60) @map("minimum_billable_seconds")
   defaultCallerId         String?         @map("default_caller_id")
   cliMode                 CliMode         @default(PASS_THROUGH) @map("cli_mode")
+  // Name of the matching endpoint on the Asterisk gateway (e.g. "telnyx").
+  // Null means the carrier code is used.
+  gatewayEndpoint         String?         @map("gateway_endpoint")
   notes                   String?
   createdAt               DateTime        @default(now()) @map("created_at")
   updatedAt               DateTime        @updatedAt @map("updated_at")
@@ -867,6 +917,13 @@ model VoipCall {
   destinationType       String?   @map("destination_type") // mirrors DestinationType values
   sipResponseCode       Int?      @map("sip_response_code")
   wholesaleRate         Decimal?  @map("wholesale_rate") @db.Decimal(12, 6)
+  // Customer pricing snapshot (Phase 3): captures the effective selling rate
+  // and billing parameters at authorization time so a completed CDR always
+  // explains itself even after the rate card is changed later.
+  customerRateCardId        String?  @map("customer_rate_card_id")
+  customerRateId            String?  @map("customer_rate_id")
+  billingIncrementSeconds   Int?     @map("billing_increment_seconds")
+  minimumBillableSeconds    Int?     @map("minimum_billable_seconds")
   // --- existing fields below remain unchanged ---
   startTime             DateTime? @map("start_time")
   answerTime            DateTime? @map("answer_time")
@@ -890,6 +947,8 @@ model VoipCall {
   phoneNumber   PhoneNumber?       @relation(fields: [phoneNumberId], references: [id], onDelete: SetNull)
   carrier       Carrier?           @relation(fields: [carrierId], references: [id], onDelete: SetNull)
   carrierRate   CarrierRate?       @relation(fields: [carrierRateId], references: [id], onDelete: SetNull)
+  customerRateCard CustomerRateCard? @relation(fields: [customerRateCardId], references: [id], onDelete: SetNull)
+  customerRateEntry CustomerRate?    @relation(fields: [customerRateId], references: [id], onDelete: SetNull)
   reservation   WalletReservation?
   webhookEvents WebhookEvent[]
 
@@ -903,6 +962,10 @@ model VoipCall {
   @@index([startTime])
   @@index([carrierId])
   @@index([carrierRateId])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, status])
+  @@index([customerRateCardId])
+  @@index([customerRateId])
   @@map("voip_calls")
 }
 
@@ -1446,4 +1509,81 @@ model ProviderRate {
   @@index([countryIso])
   @@index([organizationId, providerId, prefix, routeType, effectiveFrom, effectiveTo])
   @@map("provider_rates")
+}
+
+// ============================================================================
+// Customer commercial layer (Phase 3) — selling rates & usage aggregates.
+// Deliberately separate from the carrier/wholesale layer: customers see only
+// their selling rate; carrier rates, costs and margins never cross this line.
+// ============================================================================
+
+// A named rate card assigned to a customer organization. One ACTIVE card per
+// organization is enforced at the application layer (services/customer-rates).
+model CustomerRateCard {
+  id             String   @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId String   @map("organization_id")
+  name           String
+  description    String?
+  currency       String   @default("USD")
+  status         String   @default("ACTIVE") // ACTIVE, DISABLED
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  rates        CustomerRate[]
+  calls        VoipCall[]
+
+  @@index([organizationId, status])
+  @@map("customer_rate_cards")
+}
+
+// Customer-facing selling rate for a destination prefix. `prefix` is digits
+// only (no '+'), matched longest-first against the normalized destination —
+// same convention as CarrierRate.
+model CustomerRate {
+  id                      String    @id @default(dbgenerated("gen_random_uuid()"))
+  rateCardId              String    @map("rate_card_id")
+  prefix                  String // digits without leading '+', e.g. "30", "3021"
+  destination             String?  // human label, e.g. "Greece — Mobile"
+  country                 String?  // ISO-3166-1 alpha-2
+  rate                    Decimal   @db.Decimal(12, 6) // customer selling price per minute
+  billingIncrementSeconds Int       @default(60) @map("billing_increment_seconds")
+  minimumBillableSeconds  Int       @default(60) @map("minimum_billable_seconds")
+  effectiveFrom           DateTime  @default(now()) @map("effective_from")
+  effectiveTo             DateTime? @map("effective_to")
+  enabled                 Boolean   @default(true)
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
+
+  rateCard CustomerRateCard @relation(fields: [rateCardId], references: [id], onDelete: Cascade)
+  calls    VoipCall[]
+
+  @@index([rateCardId])
+  @@index([prefix])
+  @@index([rateCardId, prefix, enabled])
+  @@map("customer_rates")
+}
+
+// Monthly usage rollup, derived ONLY from reconciled (server-authoritative)
+// VoipCall rows. Updated inside the billing-reconciliation flow, gated on the
+// call's billingProcessed flag so repeated events cannot double-count.
+// Customers never write to this table.
+model UsageAggregate {
+  id               String   @id @default(dbgenerated("gen_random_uuid()"))
+  organizationId   String   @map("organization_id")
+  // First day of the calendar month (UTC) — usage period, NOT an invoice.
+  periodStart      DateTime @map("period_start") @db.Date
+  totalCalls       Int      @default(0) @map("total_calls")
+  answeredCalls    Int      @default(0) @map("answered_calls")
+  failedCalls      Int      @default(0) @map("failed_calls")
+  durationSeconds  Int      @default(0) @map("duration_seconds")
+  billableSeconds  Int      @default(0) @map("billable_seconds")
+  customerSpend    Decimal  @default(0) @map("customer_spend") @db.Decimal(12, 4)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, periodStart])
+  @@map("usage_aggregates")
 }

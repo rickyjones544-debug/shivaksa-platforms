@@ -65,15 +65,30 @@ export function requirePermission(
 }
 
 /**
+ * Platform operator check — true for SUPER_ADMIN and for roles holding the
+ * platform-only 'admin:*' permissions (e.g. OPERATIONS_MANAGER).
+ * Client roles (CLIENT_ADMIN, CLIENT_VIEWER, CLIENT_VOIP_SUPPORT) never hold
+ * 'admin' scope permissions, so this cleanly separates platform operations
+ * from tenant self-service.
+ */
+export function isPlatformOperator(ctx: AuthenticatedContext): boolean {
+  if (ctx.user.isSuperAdmin) return true;
+  if (ctx.membership?.status !== 'ACTIVE') return false;
+  return ctx.permissions.some(
+    (key) => key === '*' || key === 'admin:manage' || key.startsWith('admin:read:organizations')
+  );
+}
+
+/**
  * Check if the user belongs to the given organization.
- * SUPER_ADMIN is not restricted to one organization but still needs a tenant
- * context for data isolation; this helper checks the active membership.
+ * Platform operators are not restricted to one organization but still need a
+ * tenant context for data isolation; this helper checks the active membership.
  */
 export function belongsToOrganization(
   ctx: AuthenticatedContext,
   organizationId: string
 ): boolean {
-  if (ctx.user.isSuperAdmin) return true;
+  if (isPlatformOperator(ctx)) return true;
   return ctx.membership?.organizationId === organizationId;
 }
 

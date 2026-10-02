@@ -111,6 +111,8 @@ const allPermissions = [
   { scope: 'voip', action: 'write', resource: 'calls' },
   { scope: 'voip', action: 'read', resource: 'sip' },
   { scope: 'voip', action: 'write', resource: 'sip' },
+  { scope: 'voip', action: 'read', resource: 'rates' },
+  { scope: 'voip', action: 'read', resource: 'usage' },
 
   // Wallet / prepaid balance
   { scope: 'wallet', action: 'manage' },

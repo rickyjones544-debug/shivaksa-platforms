@@ -15,6 +15,7 @@ export async function POST(request: NextRequest) {
   return withAdminAuth(request, {
     scope: 'organization',
     action: 'write',
+    platformOnly: true,
     handler: async (ctx) => createOrganization(ctx, body),
   });
 }

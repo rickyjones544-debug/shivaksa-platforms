@@ -11,6 +11,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   return withVoipAdminAuth(request, {
     targetOrganizationId: id,
+    platformOnly: true,
     scope: 'voip',
     action: 'read',
     resource: 'numbers',
@@ -25,6 +26,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   return withVoipAdminAuth(request, {
     targetOrganizationId: id,
+    platformOnly: true,
     scope: 'voip',
     action: 'write',
     resource: 'numbers',

@@ -2,14 +2,16 @@ import { NextRequest } from 'next/server';
 import { withVoipAdminAuth } from '../../_utils';
 import { prisma } from '@/lib/db/prisma';
 import { toAdminServiceDto } from '@/lib/voip/dto/admin';
+import { isPlatformOperator } from '@/lib/rbac/authorization';
 
 export async function GET(request: NextRequest) {
   return withVoipAdminAuth(request, {
     scope: 'admin',
     action: 'read',
     resource: 'organizations',
+    platformOnly: true,
     handler: async (ctx) => {
-      const where = ctx.user.isSuperAdmin ? {} : { id: ctx.membership?.organizationId };
+      const where = isPlatformOperator(ctx) ? {} : { id: ctx.membership?.organizationId };
       const organizations = await prisma.organization.findMany({
         where,
         orderBy: { createdAt: 'desc' },

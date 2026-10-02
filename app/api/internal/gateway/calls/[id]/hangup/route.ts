@@ -1,26 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-
-function getGatewayApiKey(): string {
-  const key = process.env.GATEWAY_API_KEY;
-  if (!key) throw new Error('GATEWAY_API_KEY is not configured');
-  return key;
-}
+import { CallStatus } from '@/lib/voip/constants';
+import { isAuthorizedGatewayRequest, gatewayUnauthorized } from '@/lib/voip/gateway-auth';
+import { queueCallHangup } from '@/lib/voip/services/provisioning';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
+const ACTIVE_STATUSES: readonly string[] = [
+  CallStatus.INITIATED,
+  CallStatus.RINGING,
+  CallStatus.ANSWERED,
+];
+
 /**
- * Internal gateway hangup endpoint placeholder.
+ * Internal gateway hangup endpoint.
  *
- * Phase 2B: accepts an authenticated request so the API contract exists,
- * but no actual Asterisk action is performed until Phase 3.
+ * Queues a HANGUP_CALL provisioning task; the gateway agent executes
+ * `channel request hangup` against the stored Asterisk channel name.
+ * Final state/billing still arrive through the hangup-handler event report.
  */
 export async function POST(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
-  const apiKey = request.headers.get('x-gateway-api-key');
-  if (apiKey !== getGatewayApiKey()) {
-    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+  if (!isAuthorizedGatewayRequest(request)) {
+    return gatewayUnauthorized();
   }
 
   const { id } = await params;
@@ -39,8 +42,20 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
     return NextResponse.json({ success: false, error: 'Call not found' }, { status: 404 });
   }
 
-  if (organizationId && organizationId !== call.organizationId) {
-    return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+  if (!ACTIVE_STATUSES.includes(call.status)) {
+    return NextResponse.json({
+      success: true,
+      data: { gatewayCallId: id, requested: false, status: call.status },
+    });
+  }
+
+  const channel =
+    call.routingInfo && typeof call.routingInfo === 'object'
+      ? (call.routingInfo as Record<string, unknown>).asteriskChannel
+      : null;
+
+  if (typeof channel === 'string' && channel) {
+    await queueCallHangup(call.id, channel);
   }
 
   return NextResponse.json({

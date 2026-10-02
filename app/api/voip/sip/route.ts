@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { withVoipAuth, readBody } from '../_utils';
 import { getSipAccounts, createSipAccount } from '@/lib/voip/services/sip';
 import { toCustomerSipAccountDto } from '@/lib/voip/dto/customer';
+// toCustomerSipAccountDto intentionally omits the password field.
 
 export async function GET(request: NextRequest) {
   return withVoipAuth(request, {
@@ -27,8 +28,9 @@ export async function POST(request: NextRequest) {
         callerId?: string;
         maxConcurrentCalls?: number;
       }>(request);
-      const account = await createSipAccount(ctx, ctx.organization!.id, body);
-      return toCustomerSipAccountDto(account);
+      // createSipAccount returns the account DTO plus the generated password,
+      // shown to the caller exactly once.
+      return createSipAccount(ctx, ctx.organization!.id, body);
     },
   });
 }

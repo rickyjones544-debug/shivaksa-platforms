@@ -17,6 +17,12 @@ export interface RouteRequest {
   organizationId: string;
   destination: string;
   sipAccount: SipAccount;
+  /**
+   * Optional carrier-type restriction. The Asterisk gateway path can only
+   * dial SIP_GATEWAY carriers (an endpoint must exist inside Asterisk), so
+   * the caller restricts routing to them.
+   */
+  carrierType?: Carrier['type'];
 }
 
 export interface RouteResult {
@@ -114,11 +120,13 @@ export async function selectRoute(request: RouteRequest): Promise<RouteResult> {
     throw new RoutingError('No country route policy available for destination');
   }
   const destinationType = normalized.destinationType ?? DestinationType.ALL;
-  const policies = await findApplicableRoutePolicies({
-    organizationId: request.organizationId,
-    countryIso: normalized.countryIso,
-    destinationType,
-  });
+  const policies = (
+    await findApplicableRoutePolicies({
+      organizationId: request.organizationId,
+      countryIso: normalized.countryIso,
+      destinationType,
+    })
+  ).filter((policy) => !request.carrierType || policy.carrier.type === request.carrierType);
   if (policies.length === 0) {
     throw new RoutingError('No country route policy available for destination');
   }

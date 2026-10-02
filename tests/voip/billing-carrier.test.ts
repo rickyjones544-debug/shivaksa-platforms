@@ -7,6 +7,17 @@ vi.mock('@/lib/db/prisma', () => ({
   prisma: {} as any,
 }));
 
+const mockTx = {
+  wallet: { update: vi.fn() },
+  walletTransaction: { create: vi.fn() },
+  walletReservation: {
+    findUnique: vi.fn(),
+    update: vi.fn(),
+  },
+  voipCall: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+  usageAggregate: { upsert: vi.fn().mockResolvedValue({}) },
+};
+
 function mockWalletAndReservation(amount: string) {
   const wallet = { id: 'w1', balance: new Prisma.Decimal('100'), reserved: new Prisma.Decimal('0') };
   const reservation = {
@@ -17,14 +28,10 @@ function mockWalletAndReservation(amount: string) {
     wallet,
     callId: 'call-1',
   };
-  const mockTx = {
-    wallet: { update: vi.fn().mockResolvedValue(wallet) },
-    walletTransaction: { create: vi.fn().mockResolvedValue({ id: 'tx-1' }) },
-    walletReservation: {
-      findUnique: vi.fn().mockResolvedValue(reservation),
-      update: vi.fn().mockResolvedValue({ id: 'res-1', status: 'CONSUMED' }),
-    },
-  };
+  mockTx.wallet.update.mockResolvedValue(wallet);
+  mockTx.walletTransaction.create.mockResolvedValue({ id: 'tx-1' });
+  mockTx.walletReservation.findUnique.mockResolvedValue(reservation);
+  mockTx.walletReservation.update.mockResolvedValue({ id: 'res-1', status: 'CONSUMED' });
   (prisma as any).walletReservation = {
     findUnique: vi.fn().mockResolvedValue(reservation),
   };
@@ -76,7 +83,7 @@ describe('Wholesale billing', () => {
 
     await reconcileCallBilling(call as any, undefined);
 
-    const updateData = (prisma as any).voipCall.update.mock.calls[0][0].data;
+    const updateData = mockTx.voipCall.updateMany.mock.calls[0][0].data;
     expect(updateData.wholesaleRate.toString()).toBe('0.018');
     // Customer charge: 2 minutes * 0.05 = 0.10
     expect(updateData.customerCharge.toString()).toBe('0.1');
@@ -105,7 +112,7 @@ describe('Wholesale billing', () => {
 
     await reconcileCallBilling(call as any, undefined);
 
-    const updateData = (prisma as any).voipCall.update.mock.calls[0][0].data;
+    const updateData = mockTx.voipCall.updateMany.mock.calls[0][0].data;
     expect(updateData.wholesaleCost.toString()).toBe('0.018');
   });
 
@@ -130,7 +137,7 @@ describe('Wholesale billing', () => {
 
     await reconcileCallBilling(call as any, undefined);
 
-    const updateData = (prisma as any).voipCall.update.mock.calls[0][0].data;
+    const updateData = mockTx.voipCall.updateMany.mock.calls[0][0].data;
     // Stored wholesaleRate wins; updated row rate is ignored.
     expect(updateData.wholesaleCost.toString()).toBe('0.018');
   });
@@ -154,7 +161,7 @@ describe('Wholesale billing', () => {
 
     await reconcileCallBilling(call as any, undefined);
 
-    const updateData = (prisma as any).voipCall.update.mock.calls[0][0].data;
+    const updateData = mockTx.voipCall.updateMany.mock.calls[0][0].data;
     // 45s with 60/60 increment/minimum => 60s => 1 minute * 0.018
     expect(updateData.wholesaleCost.toString()).toBe('0.018');
   });
@@ -174,7 +181,7 @@ describe('Wholesale billing', () => {
 
     await reconcileCallBilling(call as any, { wholesaleCost: new Prisma.Decimal('0.015') } as any);
 
-    const updateData = (prisma as any).voipCall.update.mock.calls[0][0].data;
+    const updateData = mockTx.voipCall.updateMany.mock.calls[0][0].data;
     expect(updateData.wholesaleCost.toString()).toBe('0.015');
   });
 });

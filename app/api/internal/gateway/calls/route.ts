@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/db/prisma';
-
-function getGatewayApiKey(): string {
-  const key = process.env.GATEWAY_API_KEY;
-  if (!key) throw new Error('GATEWAY_API_KEY is not configured');
-  return key;
-}
+import { isAuthorizedGatewayRequest, gatewayUnauthorized } from '@/lib/voip/gateway-auth';
 
 function unauthorized(): NextResponse {
-  return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+  return gatewayUnauthorized();
 }
 
 /**
@@ -20,8 +15,7 @@ function unauthorized(): NextResponse {
  * It does NOT connect to Asterisk yet; that integration is Phase 3.
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  const apiKey = request.headers.get('x-gateway-api-key');
-  if (apiKey !== getGatewayApiKey()) {
+  if (!isAuthorizedGatewayRequest(request)) {
     return unauthorized();
   }
 

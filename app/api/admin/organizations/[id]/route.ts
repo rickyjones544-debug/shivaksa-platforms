@@ -21,6 +21,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   return withAdminAuth(request, {
     scope: 'organization',
     action: 'write',
+    platformOnly: true,
     handler: async (ctx) => updateOrganization(ctx, id, body),
   });
 }

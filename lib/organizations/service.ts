@@ -1,12 +1,21 @@
 import { prisma } from '@/lib/db/prisma';
 import type { AuthenticatedContext } from '@/lib/rbac/authorization';
 import { tenantWhere, assertTenantOwnership } from '@/lib/tenant/db';
+import { audit } from '@/lib/voip/services/audit';
 
 export type OrganizationInput = {
   name: string;
   slug: string;
   status?: string;
 };
+
+const ORGANIZATION_STATUSES = new Set(['ACTIVE', 'SUSPENDED']);
+
+function assertOrganizationStatus(status: string) {
+  if (!ORGANIZATION_STATUSES.has(status)) {
+    throw new Error(`Invalid organization status: ${status}`);
+  }
+}
 
 function generateSlug(name: string) {
   const base = name
@@ -36,27 +45,43 @@ export async function listOrganizations(ctx: AuthenticatedContext) {
 }
 
 export async function createOrganization(ctx: AuthenticatedContext, data: OrganizationInput) {
+  if (!data.name?.trim()) {
+    throw new Error('Organization name is required');
+  }
+  if (data.status !== undefined) {
+    assertOrganizationStatus(data.status);
+  }
   const slug = data.slug?.trim() ? data.slug.trim() : generateSlug(data.name);
 
-  return prisma.organization.create({
+  const organization = await prisma.organization.create({
     data: {
       name: data.name.trim(),
       slug,
       status: data.status ?? 'ACTIVE',
     },
   });
+
+  await audit(ctx, 'ORGANIZATION_CREATED', 'Organization', organization.id, {
+    name: organization.name,
+    status: organization.status,
+  });
+
+  return organization;
 }
 
 export async function getOrganization(ctx: AuthenticatedContext, id: string) {
-  let org: { id: string; name: string; slug: string; status: string; createdAt: Date; updatedAt: Date } | null;
   if (ctx.user.isSuperAdmin) {
-    org = await prisma.organization.findUnique({ where: { id } });
-  } else {
-    org = await prisma.organization.findFirst({
-      where: tenantWhere(ctx, { id }),
-    });
+    // Super admins may operate without an active organization membership; the
+    // record itself is the tenant here, so a missing row is the only failure.
+    const org = await prisma.organization.findUnique({ where: { id } });
+    if (!org) throw new Error('Organization not found');
+    return org;
   }
+  const org = await prisma.organization.findFirst({
+    where: tenantWhere(ctx, { id }),
+  });
   assertTenantOwnership(org, ctx);
+  if (!org) throw new Error('Organization not found');
   return org;
 }
 
@@ -66,9 +91,12 @@ export async function updateOrganization(
   data: Partial<OrganizationInput>
 ) {
   const existing = await getOrganization(ctx, id);
-  assertTenantOwnership(existing, ctx);
 
-  return prisma.organization.update({
+  if (data.status !== undefined) {
+    assertOrganizationStatus(data.status);
+  }
+
+  const updated = await prisma.organization.update({
     where: { id },
     data: {
       name: data.name ? data.name.trim() : undefined,
@@ -76,6 +104,18 @@ export async function updateOrganization(
       status: data.status,
     },
   });
+
+  await audit(
+    ctx,
+    data.status && data.status !== existing.status
+      ? 'ORGANIZATION_STATUS_CHANGED'
+      : 'ORGANIZATION_UPDATED',
+    'Organization',
+    id,
+    { previousStatus: existing.status, status: updated.status, name: updated.name }
+  );
+
+  return updated;
 }
 
 export async function changeOrganizationStatus(
@@ -84,10 +124,17 @@ export async function changeOrganizationStatus(
   status: string
 ) {
   const existing = await getOrganization(ctx, id);
-  assertTenantOwnership(existing, ctx);
+  assertOrganizationStatus(status);
 
-  return prisma.organization.update({
+  const updated = await prisma.organization.update({
     where: { id },
     data: { status },
   });
+
+  await audit(ctx, 'ORGANIZATION_STATUS_CHANGED', 'Organization', id, {
+    previousStatus: existing.status,
+    status,
+  });
+
+  return updated;
 }

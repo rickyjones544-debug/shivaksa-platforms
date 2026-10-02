@@ -1,0 +1,8 @@
+[Unit]
+Description=Shivaksa wallet reservation sweeper (releases expired call holds)
+After=network.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/shivaksa-gateway/agent.env
+ExecStart=/bin/sh -c 'curl -fsS -m 20 -X POST "$${PLATFORM_API_URL}/api/internal/jobs/sweep-reservations" -H "x-gateway-api-key: $${GATEWAY_API_KEY}"'

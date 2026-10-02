@@ -133,3 +133,8 @@ export const DEFAULT_MAX_CALL_DURATION_MINUTES = 60;
 export const DEFAULT_BILLING_INCREMENT_SECONDS = 60;
 export const DEFAULT_MINIMUM_BILLABLE_SECONDS = 60;
 export const DEFAULT_CURRENCY = 'USD';
+
+// Wallet reservations expire well beyond the maximum call duration so a
+// sweeper can safely reclaim funds from calls that never reached a final
+// state. In-progress calls get their reservation extended, never released.
+export const WALLET_RESERVATION_TTL_MS = 2 * 60 * 60 * 1000;

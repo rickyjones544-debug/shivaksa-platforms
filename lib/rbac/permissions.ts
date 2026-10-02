@@ -140,6 +140,8 @@ const voipPermissions: PermissionDefinition[] = [
   { scope: 'voip', action: 'write', resource: 'calls', description: 'Initiate/manage calls' },
   { scope: 'voip', action: 'read', resource: 'sip', description: 'Read SIP accounts' },
   { scope: 'voip', action: 'write', resource: 'sip', description: 'Manage SIP accounts' },
+  { scope: 'voip', action: 'read', resource: 'rates', description: 'Read customer selling rates (rate card)' },
+  { scope: 'voip', action: 'read', resource: 'usage', description: 'Read usage aggregates and active call counts' },
 ];
 
 // Wallet / prepaid balance

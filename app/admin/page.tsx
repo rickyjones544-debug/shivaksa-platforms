@@ -25,9 +25,9 @@ const adminModules = [
     icon: 'phone',
   },
   {
-    href: '/admin/users',
-    label: 'Users',
-    description: 'Inspect platform users and roles.',
+    href: '/admin/organizations',
+    label: 'Customer Users',
+    description: 'Manage users and roles within each customer organization.',
     color: 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400',
     icon: 'users',
   },

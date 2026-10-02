@@ -19,6 +19,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   return withVoipAdminAuth(request, {
     targetOrganizationId: id,
+    platformOnly: true,
     scope: 'wallet',
     action: 'write',
     handler: async (ctx) => {

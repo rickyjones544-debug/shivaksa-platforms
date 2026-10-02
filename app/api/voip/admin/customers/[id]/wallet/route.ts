@@ -11,6 +11,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   return withVoipAdminAuth(request, {
     targetOrganizationId: id,
+    platformOnly: true,
     scope: 'wallet',
     action: 'read',
     handler: async () => {

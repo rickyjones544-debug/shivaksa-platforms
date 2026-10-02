@@ -33,6 +33,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   return withVoipAdminAuth(request, {
     targetOrganizationId: id,
+    platformOnly: true,
     scope: 'voip',
     action: 'read',
     resource: 'calls',
