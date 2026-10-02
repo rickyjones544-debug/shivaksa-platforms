@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import type { CustomerServiceStatus } from './customer';
+import { CUSTOMER_SIP_PORT, CUSTOMER_SIP_SERVER, type CustomerServiceStatus } from './customer';
 
 export function toAdminSipAccountDto(account: {
   id: string;
@@ -32,6 +32,8 @@ export function toAdminSipAccountDto(account: {
     callerId: account.callerId,
     maxConcurrentCalls: account.maxConcurrentCalls,
     transport: account.transport || 'UDP',
+    server: CUSTOMER_SIP_SERVER,
+    port: CUSTOMER_SIP_PORT,
     providerConnectionId: account.providerConnectionId,
     provisioningState: account.provisioningState || 'PENDING',
     provisioningError: account.provisioningError || null,

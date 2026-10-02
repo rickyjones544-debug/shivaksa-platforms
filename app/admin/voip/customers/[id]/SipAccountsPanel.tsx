@@ -10,6 +10,8 @@ interface AdminSipAccount {
   callerId: string | null;
   maxConcurrentCalls: number;
   transport: string;
+  server: string;
+  port: number;
   provisioningState: string;
   provisioningError: string | null;
   provisionedAt: string | null;
@@ -50,6 +52,11 @@ export default function SipAccountsPanel({
   const [busy, setBusy] = useState<string | null>(null);
   const [revealed, setRevealed] = useState<Record<string, string>>({});
   const [creating, setCreating] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [formUsername, setFormUsername] = useState('');
+  const [formCallerId, setFormCallerId] = useState('');
+  const [formMaxCalls, setFormMaxCalls] = useState('1');
+  const [copied, setCopied] = useState<string | null>(null);
 
   async function load() {
     const res = await fetch(`/api/voip/admin/customers/${customerId}/sip`, { credentials: 'include' });
@@ -70,25 +77,52 @@ export default function SipAccountsPanel({
     onError(null);
     onMessage(null);
     try {
+      const maxCalls = parseInt(formMaxCalls, 10);
+      const payload: Record<string, unknown> = {};
+      if (formUsername.trim()) payload.username = formUsername.trim();
+      if (formCallerId.trim()) payload.callerId = formCallerId.trim();
+      if (Number.isInteger(maxCalls) && maxCalls > 0) payload.maxConcurrentCalls = maxCalls;
+
       const res = await fetch(`/api/voip/admin/customers/${customerId}/sip`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify(payload),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error || 'Failed to create SIP account');
       if (json.data?.password) {
         setRevealed((prev) => ({ ...prev, [json.data.id]: json.data.password }));
-        onMessage(`SIP account created (${json.data.username}). Save the password now — it is shown only once.`);
+        onMessage(`SIP account created (${json.data.username}). Copy the customer configuration below — the password is shown only once.`);
       } else {
         onMessage('SIP account created');
       }
+      setShowForm(false);
+      setFormUsername('');
+      setFormCallerId('');
+      setFormMaxCalls('1');
       await load();
     } catch (err) {
       onError(err instanceof Error ? err.message : 'Failed to create SIP account');
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function copyConfig(account: AdminSipAccount) {
+    const lines = [
+      `SIP Server: ${account.server}`,
+      `Port: ${account.port}`,
+      `Transport: ${account.transport}`,
+      `Username: ${account.username}`,
+      `Password: ${revealed[account.id] || '(reveal password first)'}`,
+    ].join('\n');
+    try {
+      await navigator.clipboard.writeText(lines);
+      setCopied(account.id);
+      setTimeout(() => setCopied(null), 2000);
+    } catch {
+      onError('Copy failed — select and copy the fields manually');
     }
   }
 
@@ -161,13 +195,66 @@ export default function SipAccountsPanel({
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">SIP Accounts</h2>
         <button
-          onClick={create}
-          disabled={creating}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium text-sm disabled:opacity-50"
+          onClick={() => setShowForm((v) => !v)}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium text-sm"
         >
-          {creating ? 'Creating…' : 'Create SIP account'}
+          {showForm ? 'Cancel' : '+ Create SIP Account'}
         </button>
       </div>
+
+      {showForm && (
+        <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                Username <span className="text-zinc-400">(optional — auto-generated if blank)</span>
+              </label>
+              <input
+                type="text"
+                value={formUsername}
+                onChange={(e) => setFormUsername(e.target.value)}
+                placeholder="e.g. client001"
+                className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                Caller ID <span className="text-zinc-400">(E.164, optional)</span>
+              </label>
+              <input
+                type="text"
+                value={formCallerId}
+                onChange={(e) => setFormCallerId(e.target.value)}
+                placeholder="+13035550100"
+                className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                Max concurrent calls
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={formMaxCalls}
+                onChange={(e) => setFormMaxCalls(e.target.value)}
+                className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            A secure password is generated automatically and shown once after creation. The account
+            is queued for Asterisk provisioning immediately.
+          </p>
+          <button
+            onClick={create}
+            disabled={creating}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium text-sm disabled:opacity-50"
+          >
+            {creating ? 'Creating…' : 'Create account'}
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <p className="text-sm text-zinc-500 dark:text-zinc-400">Loading…</p>
@@ -260,6 +347,44 @@ export default function SipAccountsPanel({
                   Provisioning error: {account.provisioningError}
                 </div>
               )}
+
+              <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 px-4 py-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                    Customer softphone configuration
+                  </span>
+                  <button
+                    onClick={() => copyConfig(account)}
+                    className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    {copied === account.id ? 'Copied!' : 'Copy configuration'}
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs font-mono">
+                  <div>
+                    <div className="text-zinc-500">SIP Server</div>
+                    <div className="text-zinc-800 dark:text-zinc-200">{account.server}</div>
+                  </div>
+                  <div>
+                    <div className="text-zinc-500">Port</div>
+                    <div className="text-zinc-800 dark:text-zinc-200">{account.port}</div>
+                  </div>
+                  <div>
+                    <div className="text-zinc-500">Transport</div>
+                    <div className="text-zinc-800 dark:text-zinc-200">{account.transport}</div>
+                  </div>
+                  <div>
+                    <div className="text-zinc-500">Username</div>
+                    <div className="text-zinc-800 dark:text-zinc-200">{account.username}</div>
+                  </div>
+                  <div>
+                    <div className="text-zinc-500">Password</div>
+                    <div className="text-zinc-800 dark:text-zinc-200 break-all">
+                      {revealed[account.id] || '••••••••••••'}
+                    </div>
+                  </div>
+                </div>
+              </div>
 
               <div className="flex flex-wrap gap-2">
                 {account.status === 'ACTIVE' ? (
