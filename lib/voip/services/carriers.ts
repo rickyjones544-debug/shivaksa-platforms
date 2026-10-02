@@ -39,6 +39,7 @@ export interface CreateCarrierInput {
   minimumBillableSeconds?: number;
   defaultCallerId?: string;
   cliMode?: CliMode;
+  gatewayEndpoint?: string | null;
   notes?: string;
   status?: CarrierStatus;
   enabled?: boolean;
@@ -61,6 +62,7 @@ export interface UpdateCarrierInput {
   minimumBillableSeconds?: number;
   defaultCallerId?: string;
   cliMode?: CliMode;
+  gatewayEndpoint?: string | null;
   notes?: string;
 }
 
@@ -195,6 +197,7 @@ export async function createCarrier(
       minimumBillableSeconds: input.minimumBillableSeconds ?? 60,
       defaultCallerId: input.defaultCallerId ?? null,
       cliMode: input.cliMode ?? 'PASS_THROUGH',
+      gatewayEndpoint: input.gatewayEndpoint ?? null,
       notes: input.notes ?? null,
       status: input.status ?? 'TEST',
       enabled: input.enabled ?? true,
@@ -237,6 +240,8 @@ export async function updateCarrier(
   if (input.minimumBillableSeconds !== undefined)
     data.minimumBillableSeconds = input.minimumBillableSeconds;
   if (input.defaultCallerId !== undefined) data.defaultCallerId = input.defaultCallerId ?? null;
+  if (input.gatewayEndpoint !== undefined)
+    data.gatewayEndpoint = input.gatewayEndpoint ?? null;
   if (input.cliMode !== undefined) data.cliMode = input.cliMode;
   if (input.notes !== undefined) data.notes = input.notes ?? null;
 
