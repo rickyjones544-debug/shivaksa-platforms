@@ -228,6 +228,7 @@ export interface InboundAuthorization {
   callId: string;
   organizationId: string;
   sipAccountId: string | null;
+  asteriskEndpoint: string | null;
   providerCallId: string;
   callerId: string;
   destination: string;
@@ -272,6 +273,7 @@ export async function authorizeInboundCall(
     callId: call.id,
     organizationId: number.organizationId,
     sipAccountId,
+    asteriskEndpoint: number.sipAccount?.asteriskEndpoint ?? null,
     providerCallId,
     callerId,
     destination,
