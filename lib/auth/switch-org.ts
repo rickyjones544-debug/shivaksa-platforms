@@ -1,6 +1,5 @@
-import { createHash } from 'crypto';
 import { prisma } from '@/lib/db/prisma';
-import { getSessionToken, setSessionMembership } from './session';
+import { getSession, getSessionToken, setSessionMembership } from './session';
 import { resolveAuthContext } from '@/lib/tenant/context';
 import type { AuthenticatedContext } from '@/lib/rbac/authorization';
 
@@ -8,22 +7,10 @@ export type SwitchResult =
   | { success: true; ctx: AuthenticatedContext }
   | { success: false; error: string };
 
-function hashToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex');
-}
-
 export async function switchOrganization(organizationId: string): Promise<SwitchResult> {
   const token = await getSessionToken();
-  if (!token) {
-    return { success: false, error: 'Unauthorized' };
-  }
-
-  const session = await prisma.session.findFirst({
-    where: { tokenHash: hashToken(token), revoked: false },
-    include: { user: true },
-  });
-
-  if (!session) {
+  const session = await getSession(token);
+  if (!token || !session) {
     return { success: false, error: 'Unauthorized' };
   }
 
@@ -34,6 +21,7 @@ export async function switchOrganization(organizationId: string): Promise<Switch
       userId: session.userId,
       organizationId,
       status: 'ACTIVE',
+      organization: { status: 'ACTIVE' },
     },
   });
 

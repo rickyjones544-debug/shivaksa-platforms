@@ -31,7 +31,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      ctx: result.ctx,
+      pending: true,
+      message: 'Registration submitted. Your account must be approved before you can sign in.',
     });
   } catch (error) {
     console.error('Registration error:', error);

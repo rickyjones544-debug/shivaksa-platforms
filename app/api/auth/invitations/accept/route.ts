@@ -30,6 +30,14 @@ export async function POST(request: NextRequest) {
 
     const result = await acceptInvitation(token, { name, password });
 
+    if (result.user.status !== 'ACTIVE') {
+      return NextResponse.json({
+        success: true,
+        pending: true,
+        organizationId: result.organizationId,
+      });
+    }
+
     // Create a session for the accepted user in the invited organization.
     const membership = await prisma.organizationMembership.findUnique({
       where: {

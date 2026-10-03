@@ -44,7 +44,7 @@ export default function RegisterPage() {
       setTimeout(() => {
         router.push('/login');
       }, 2000);
-    } catch (err) {
+    } catch {
       setError('An error occurred. Please try again.');
     } finally {
       setLoading(false);
@@ -55,11 +55,12 @@ export default function RegisterPage() {
     return (
       <div className="w-full max-w-md bg-white dark:bg-zinc-900 rounded-2xl shadow-lg p-8 text-center border border-zinc-200 dark:border-zinc-800">
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white">
-          Registration Successful
+          Registration submitted
         </h1>
         <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-          Redirecting to login...
+          Your account is pending approval. You can sign in after an administrator activates it.
         </p>
+        <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-500">Redirecting to login...</p>
       </div>
     );
   }

@@ -26,6 +26,14 @@ export function hashToken(token: string): string {
  * Returns the raw token (for cookie) and stores the hash.
  */
 export async function createSession(userId: string, membershipId?: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { status: true },
+  });
+  if (!user || user.status !== 'ACTIVE') {
+    throw new Error('User is not active');
+  }
+
   const token = generateSessionToken();
   const tokenHash = hashToken(token);
   const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_MS);
@@ -59,6 +67,13 @@ export async function getSession(token: string | undefined) {
   if (!session) return null;
   if (session.revoked) return null;
   if (new Date() > session.expiresAt) return null;
+  if (session.user.status !== 'ACTIVE') {
+    await prisma.session.update({
+      where: { id: session.id },
+      data: { revoked: true },
+    });
+    return null;
+  }
 
   return session;
 }

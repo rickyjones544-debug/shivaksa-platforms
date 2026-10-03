@@ -29,7 +29,7 @@ export async function resolveAuthContext(
   if (!user) return null;
 
   const memberships = await prisma.organizationMembership.findMany({
-    where: { userId, status: 'ACTIVE' },
+    where: { userId, status: 'ACTIVE', organization: { status: 'ACTIVE' } },
     include: {
       organization: true,
       role: {

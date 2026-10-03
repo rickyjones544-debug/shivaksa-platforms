@@ -47,7 +47,11 @@ export async function withAdminAuth<T>(
   } catch (error) {
     const message = error instanceof Error ? error.message : 'An error occurred';
     console.error(`Admin API error [${options.scope}:${options.action}]:`, error);
-    const status = message === 'Not found' || message === 'Organization not found' || message === 'Membership not found' ? 404 : 500;
+    const status = message.startsWith('Forbidden')
+      ? 403
+      : message === 'Not found' || message === 'Organization not found' || message === 'Membership not found'
+        ? 404
+        : 500;
     return NextResponse.json(
       { success: false, error: message },
       { status }

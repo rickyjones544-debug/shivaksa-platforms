@@ -17,13 +17,16 @@ import {
 import { validateLogin, validateRegistration } from './validation';
 
 const GENERIC_AUTH_ERROR = 'Invalid email or password';
-const GENERIC_SUSPENDED_ERROR = 'Account is suspended';
 
 // Re-export for consumers
 export type { AuthenticatedContext } from '@/lib/rbac/authorization';
 
 export type AuthResult =
   | { success: true; ctx: AuthenticatedContext }
+  | { success: false; error: string };
+
+export type RegistrationResult =
+  | { success: true; pending: true }
   | { success: false; error: string };
 
 export async function loginUser(
@@ -43,12 +46,8 @@ export async function loginUser(
     return { success: false, error: GENERIC_AUTH_ERROR };
   }
 
-  if (user.status === 'SUSPENDED') {
-    return { success: false, error: GENERIC_SUSPENDED_ERROR };
-  }
-
   const isValid = await verifyPassword(password, user.passwordHash);
-  if (!isValid) {
+  if (!isValid || user.status !== 'ACTIVE') {
     return { success: false, error: GENERIC_AUTH_ERROR };
   }
 
@@ -69,7 +68,7 @@ export async function registerUser(data: {
   email: string;
   password: string;
   confirmPassword: string;
-}): Promise<AuthResult> {
+}): Promise<RegistrationResult> {
   const validation = validateRegistration(data);
   if (!validation.valid) {
     const firstError = Object.values(validation.errors)[0];
@@ -91,7 +90,6 @@ export async function registerUser(data: {
     return { success: false, error: 'An account with this email already exists' };
   }
 
-  const isFirstUser = (await prisma.user.count()) === 0;
   const passwordHash = await hashPassword(data.password);
 
   const user = await prisma.user.create({
@@ -100,7 +98,7 @@ export async function registerUser(data: {
       email,
       passwordHash,
       status: 'PENDING',
-      isSuperAdmin: isFirstUser,
+      isSuperAdmin: false,
     },
   });
 
@@ -125,7 +123,7 @@ export async function registerUser(data: {
     return { success: false, error: 'Default organization role not found' };
   }
 
-  const membership = await prisma.organizationMembership.create({
+  await prisma.organizationMembership.create({
     data: {
       userId: user.id,
       organizationId: organization.id,
@@ -134,15 +132,7 @@ export async function registerUser(data: {
     },
   });
 
-  const ctx = await resolveAuthContext(user.id, membership.id);
-  if (!ctx) {
-    return { success: false, error: 'Failed to resolve auth context' };
-  }
-
-  const { token, expiresAt } = await createSession(user.id, membership.id);
-  await setSessionCookie(token, expiresAt);
-
-  return { success: true, ctx };
+  return { success: true, pending: true };
 }
 
 export async function logoutUser(): Promise<{ success: boolean }> {
@@ -159,7 +149,11 @@ export async function getCurrentUser(): Promise<AuthenticatedContext | null> {
   const session = await getSession(token);
   if (!session) return null;
 
-  return resolveAuthContext(session.user.id, session.membershipId ?? undefined);
+  const ctx = await resolveAuthContext(session.user.id, session.membershipId ?? undefined);
+  if (!ctx && token) {
+    await revokeSession(token);
+  }
+  return ctx;
 }
 
 export async function requireAuth(): Promise<AuthenticatedContext> {

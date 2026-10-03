@@ -32,7 +32,7 @@ function assertMembershipStatus(status: string) {
   }
 }
 
-async function assertAssignableRole(ctx: AuthenticatedContext, roleId: string) {
+export async function assertAssignableRole(ctx: AuthenticatedContext, roleId: string) {
   const role = await prisma.role.findUnique({
     where: { id: roleId },
     include: { permissions: { include: { permission: { select: { key: true } } } } },

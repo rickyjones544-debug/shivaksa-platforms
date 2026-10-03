@@ -2,7 +2,8 @@ import { prisma } from '@/lib/db/prisma';
 import type { AuthenticatedContext } from '@/lib/rbac/authorization';
 import { tenantWhere, assertTenantOwnership } from '@/lib/tenant/db';
 import { generateSessionToken, hashToken } from '@/lib/auth/session';
-import { hashPassword } from '@/lib/auth/password';
+import { hashPassword, validatePasswordStrength } from '@/lib/auth/password';
+import { assertAssignableRole } from '@/lib/memberships/service';
 
 const INVITATION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
@@ -26,6 +27,7 @@ export async function createInvitation(
   data: InvitationInput
 ) {
   await ensureOrganizationAccess(ctx, organizationId);
+  const role = await assertAssignableRole(ctx, data.roleId);
 
   const token = generateSessionToken();
   const tokenHash = hashToken(token);
@@ -35,7 +37,7 @@ export async function createInvitation(
     data: {
       email: data.email.toLowerCase().trim(),
       organizationId,
-      roleId: data.roleId,
+      roleId: role.id,
       tokenHash,
       status: 'PENDING',
       invitedById: ctx.user.id,
@@ -74,14 +76,17 @@ export async function acceptInvitation(token: string, userData?: { name: string;
     if (!userData?.name || !userData?.password) {
       throw new Error('Name and password are required to create an account');
     }
-    const isFirstUser = (await prisma.user.count()) === 0;
+    const strength = validatePasswordStrength(userData.password);
+    if (!strength.valid) {
+      throw new Error(strength.message || 'Password does not meet complexity requirements');
+    }
     user = await prisma.user.create({
       data: {
         name: userData.name.trim(),
         email,
         passwordHash: await hashPassword(userData.password),
         status: 'ACTIVE',
-        isSuperAdmin: isFirstUser,
+        isSuperAdmin: false,
       },
     });
   }
